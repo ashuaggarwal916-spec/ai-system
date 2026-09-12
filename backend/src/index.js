@@ -42,6 +42,7 @@ async function main() {
   const agents = new AgentManager(db, models, registry);
   const tasks = new TaskEngine(db, agents, memory);
   const brain = new Brain(db, agents, models, tasks, memory, registry);
+  await brain.loadSkills();
   
   // Express setup
   const app = express();

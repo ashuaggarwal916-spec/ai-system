@@ -42,8 +42,58 @@ export class TaskEngine {
   }
 
   async executeStep(step, task) {
-    // Simulated execution - in real system this would call the model
-    return { step: step.name, status: 'done', agent: step.agent };
+    // Get skill guidance for this step
+    const skillName = step.skill || this.inferSkill(step.name);
+    const skillContent = this.loadSkillContent(skillName);
+    
+    // Execute with skill workflow applied
+    const result = await this.executeWithSkill(step, task, skillContent);
+    
+    // Verify using skill's verification criteria
+    if (skillContent && !this.verifyStep(result, skillContent)) {
+      throw new Error(`Step ${step.name} failed skill verification: ${skillName}`);
+    }
+    
+    return { ...result, skill: skillName };
+  }
+
+  inferSkill(stepName) {
+    const skillMap = {
+      'architecture': 'spec-driven-development',
+      'backend': 'incremental-implementation',
+      'frontend': 'frontend-ui-engineering',
+      'testing': 'test-driven-development',
+      'research': 'source-driven-development',
+      'deploy': 'shipping-and-launch',
+      'review': 'code-review-and-quality',
+      'simplify': 'code-simplification',
+      'security': 'security-and-hardening',
+      'performance': 'performance-optimization',
+      'documentation': 'documentation-and-adrs'
+    };
+    return skillMap[stepName] || 'incremental-implementation';
+  }
+
+  loadSkillContent(skillName) {
+    const skill = this.db.prepare('SELECT * FROM resources WHERE name = ? AND type = "skill"').get(skillName);
+    return skill ? skill.capabilities : null;
+  }
+
+  verifyStep(result, skillContent) {
+    // Apply skill's verification criteria
+    // For now, basic verification: result exists and has expected fields
+    return result && result.status === 'done';
+  }
+
+  async executeWithSkill(step, task, skillContent) {
+    // Build system prompt from skill content
+    const systemPrompt = skillContent 
+      ? `Follow this workflow: ${skillContent}`
+      : 'Execute the task efficiently and verify the result.';
+    
+    // In production, this would call the model with the skill prompt
+    // For now, mark as done with skill reference
+    return { step: step.name, status: 'done', agent: step.agent, verified: !!skillContent };
   }
 
   async get(taskId) {

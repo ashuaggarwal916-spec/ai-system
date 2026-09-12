@@ -36,6 +36,15 @@ export class Brain {
               path: skillPath,
               content
             });
+            
+            // Register in resource registry
+            this.registry.register({
+              name: dir.name,
+              type: 'skill',
+              status: 'active',
+              capabilities: ['workflow', dir.name],
+              config: { path: skillPath }
+            });
           } catch {
             // No SKILL.md in this directory
           }
@@ -231,11 +240,20 @@ export class Brain {
   /**
    * Chat with the Brain using model gateway
    */
-  async chat(userId, message, conversationId) {
+  async chat(userId, message, conversationId, skillName = null) {
+    // Get skill content if specified
+    let systemPrompt = this.getSystemPrompt();
+    if (skillName) {
+      const skill = this.getSkill(skillName);
+      if (skill) {
+        systemPrompt += `\n\n---\nActive Skill: ${skillName}\n${skill.content.substring(0, 2000)}`;
+      }
+    }
+
     const response = await this.models.chat({
       model: 'auto',
       messages: [
-        { role: 'system', content: this.getSystemPrompt() },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
       ],
       stream: false
@@ -245,7 +263,8 @@ export class Brain {
       role: 'assistant',
       content: response.content,
       model: response.model,
-      provider: response.provider
+      provider: response.provider,
+      skill: skillName
     };
   }
 

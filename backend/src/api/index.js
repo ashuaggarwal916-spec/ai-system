@@ -61,9 +61,34 @@ export function apiRouter({ auth, brain, agents, tasks, memory, registry }) {
     res.json(task || { error: 'Task not found' });
   });
 
+  // Capability registry routes
+  router.get('/capabilities', auth.authMiddleware, (req, res) => {
+    try {
+      const registry = JSON.parse(require('fs').readFileSync('../capability-registry.json', 'utf-8'));
+      res.json(registry.capabilities);
+    } catch {
+      res.json([]);
+    }
+  });
+
   // Skills routes
   router.get('/skills', auth.authMiddleware, (req, res) => {
     res.json(brain.listSkills());
+  });
+
+  // Deploy using free tiers from free-for-dev
+  router.get('/deploy/options', auth.authMiddleware, (req, res) => {
+    try {
+      const registry = JSON.parse(require('fs').readFileSync('../capability-registry.json', 'utf-8'));
+      const deployCaps = registry.capabilities.filter(c => 
+        c.capabilities.includes('free-cloud-tiers') || 
+        c.capabilities.includes('free-hosting') ||
+        c.capabilities.includes('free-databases')
+      );
+      res.json(deployCaps);
+    } catch {
+      res.json([]);
+    }
   });
 
   // Agents routes

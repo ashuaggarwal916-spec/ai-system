@@ -1,0 +1,118 @@
+{
+  "capabilities": [
+    {
+      "id": "agency-agents",
+      "name": "Agency Agents",
+      "category": "ai",
+      "source": "github.com/msitarzewski/agency-agents",
+      "path": "capabilities/ai/agency-agents",
+      "status": "active",
+      "capabilities": [
+        "230-specialist-agents",
+        "frontend-developer", "backend-architect", "devops-automator",
+        "ui-designer", "security-engineer", "penetration-tester",
+        "content-creator", "seo-specialist", "growth-hacker",
+        "data-engineer", "ai-engineer", "technical-writer",
+        "fullstack-developer", "mobile-developer", "game-developer",
+        "finance-tracker", "legal-compliance", "healthcare-agent",
+        "research-synthesist", "gis-analyst", "blockchain-auditor",
+        "prompt-engineer", "mcp-builder", "automation-governance"
+      ],
+      "brain_integration": {
+        "module": "agents",
+        "auto_detect": true,
+        "triggers": [
+          "build", "create", "develop", "design", "deploy",
+          "research", "write", "analyze", "test", "secure",
+          "optimize", "automate", "translate", "generate"
+        ]
+      },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "jarvis",
+      "name": "Jarvis Voice Interface",
+      "category": "voice",
+      "source": "github.com/hectorg2211/jarvis",
+      "path": "capabilities/voice/jarvis",
+      "status": "active",
+      "capabilities": [
+        "voice-wake",
+        "microphone-input",
+        "double-clap-detection",
+        "elevenlabs-tts",
+        "desktop-automation",
+        "multi-platform"
+      ],
+      "brain_integration": {
+        "module": "voice",
+        "auto_detect": true,
+        "triggers": ["voice", "speak", "talk", "listen", "wake"]
+      },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "public-apis",
+      "name": "Public APIs Directory",
+      "category": "api",
+      "source": "github.com/public-apis/public-apis",
+      "path": "capabilities/api/public-apis",
+      "status": "active",
+      "capabilities": [
+        "1000-free-apis",
+        "weather", "finance", "geocoding", "translation",
+        "image-generation", "text-analysis", "search",
+        "email-verification", "phone-validation", "ip-lookup",
+        "crypto", "sports", "movies", "books", "science",
+        "government", "health", "machine-learning"
+      ],
+      "brain_integration": {
+        "module": "api",
+        "auto_detect": true,
+        "triggers": [
+          "api", "fetch", "get data", "weather", "translate",
+          "geocode", "validate", "search", "analyze"
+        ]
+      },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "free-for-dev",
+      "name": "Free for Developers",
+      "category": "directory",
+      "source": "free-for.dev",
+      "path": "capabilities/directory/free-for-dev.md",
+      "status": "active",
+      "capabilities": [
+        "free-cloud-tiers",
+        "free-apis",
+        "free-databases",
+        "free-hosting",
+        "free-cdn",
+        "free-ci-cd",
+        "free-monitoring",
+        "free-email",
+        "free-storage",
+        "free-auth"
+      ],
+      "brain_integration": {
+        "module": "deploy",
+        "auto_detect": true,
+        "triggers": [
+          "deploy", "host", "free tier", "free api",
+          "cloud", "database", "cdn", "monitoring"
+        ]
+      },
+      "installed_at": "2026-09-12"
+    }
+  ],
+  "stats": {
+    "total_capabilities": 4,
+    "by_category": {
+      "ai": 1,
+      "voice": 1,
+      "api": 1,
+      "directory": 1
+    }
+  }
+}

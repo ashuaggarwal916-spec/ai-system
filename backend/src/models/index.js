@@ -21,10 +21,21 @@ export class ModelGateway {
         errorCount: 0
       },
       {
+        name: 'kira-ai',
+        apiKey: process.env.KIRA_AI_KEY || 'kira_244519e2e29e2b30c104bb4b4fb8638a',
+        baseUrl: process.env.KIRA_AI_URL || 'https://api.kira.ai/v1',
+        priority: 2,
+        status: 'active',
+        lastError: null,
+        errorCount: 0,
+        free_tokens: 80000000,
+        notes: '80M free tokens/month'
+      },
+      {
         name: 'omniroute',
         apiKey: process.env.OMNIROUTE_KEY || '',
         baseUrl: process.env.OMNIROUTE_URL || 'http://localhost:20128/v1',
-        priority: 2,
+        priority: 3,
         status: 'standby',
         lastError: null,
         errorCount: 0
@@ -33,7 +44,7 @@ export class ModelGateway {
         name: 'freellmapi',
         apiKey: process.env.FREELLMAPI_KEY || '',
         baseUrl: process.env.FREELLMAPI_URL || 'http://localhost:3001/v1',
-        priority: 3,
+        priority: 4,
         status: 'standby',
         lastError: null,
         errorCount: 0
