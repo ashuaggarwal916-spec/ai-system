@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI System</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f23; color: #e0e0e0; }
+    .app { display: flex; height: 100vh; }
+    .sidebar { width: 240px; background: #1a1a2e; padding: 20px; border-right: 1px solid #2a2a3e; }
+    .sidebar h2 { color: #64ffda; margin-bottom: 20px; font-size: 18px; }
+    .sidebar ul { list-style: none; }
+    .sidebar li { padding: 10px 15px; cursor: pointer; border-radius: 8px; margin-bottom: 5px; transition: background 0.2s; }
+    .sidebar li:hover, .sidebar li.active { background: #2a2a3e; color: #64ffda; }
+    .main { flex: 1; display: flex; flex-direction: column; }
+    .header { padding: 20px; border-bottom: 1px solid #2a2a3e; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 20px; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; }
+    .input-bar { padding: 20px; border-top: 1px solid #2a2a3e; display: flex; gap: 10px; }
+    .input-bar input { flex: 1; padding: 15px; border-radius: 10px; border: 1px solid #2a2a3e; background: #1a1a2e; color: #e0e0e0; font-size: 14px; }
+    .input-bar button { padding: 15px 25px; border-radius: 10px; border: none; background: #64ffda; color: #0f0f23; font-weight: bold; cursor: pointer; }
+    .message { padding: 15px; margin-bottom: 10px; border-radius: 10px; background: #1a1a2e; }
+    .message.user { border-left: 3px solid #64ffda; }
+    .message.assistant { border-left: 3px solid #bb86fc; }
+    .empty { text-align: center; padding: 60px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="sidebar">
+      <h2>🧠 AI System</h2>
+      <ul>
+        <li class="active" onclick="showView('chat')">💬 New Chat</li>
+        <li onclick="showView('tasks')">📋 Tasks</li>
+        <li onclick="showView('projects')">📁 Projects</li>
+        <li onclick="showView('agents')">🤖 Agents</li>
+        <li onclick="showView('memory')">🧠 Memory</li>
+        <li onclick="showView('files')">📄 Files</li>
+        <li onclick="showView('settings')">⚙️ Settings</li>
+      </ul>
+    </div>
+    <div class="main">
+      <div class="header">
+        <h1>AI Agent Hub</h1>
+        <div>
+          <span id="userEmail" style="color: #888; margin-right: 15px;"></span>
+          <button onclick="logout()" style="padding: 8px 15px; border-radius: 5px; border: 1px solid #2a2a3e; background: transparent; color: #e0e0e0; cursor: pointer;">Logout</button>
+        </div>
+      </div>
+      <div class="content" id="content">
+        <div class="empty">
+          <h2>Welcome to AI System</h2>
+          <p>Your multi-user AI agent operating system</p>
+        </div>
+      </div>
+      <div class="input-bar">
+        <input type="text" id="messageInput" placeholder="Type your command..." onkeypress="if(event.key==='Enter')sendMessage()">
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:3000/api';
+    let token = localStorage.getItem('token');
+    let user = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (token && user) {
+      document.getElementById('userEmail').textContent = user.email;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+
+      const content = document.getElementById('content');
+      content.innerHTML += `<div class="message user"><strong>You:</strong> ${message}</div>`;
+
+      try {
+        const res = await fetch(`${API}/command`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ command: message })
+        });
+        const data = await res.json();
+        content.innerHTML += `<div class="message assistant"><strong>Brain:</strong> ${JSON.stringify(data, null, 2)}</div>`;
+      } catch (err) {
+        content.innerHTML += `<div class="message assistant"><strong>Error:</strong> ${err.message}</div>`;
+      }
+      content.scrollTop = content.scrollHeight;
+    }
+
+    function showView(view) {
+      document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('content').innerHTML = `<div class="empty"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p>Coming soon</p></div>`;
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.reload();
+    }
+  </script>
+</body>
+</html>

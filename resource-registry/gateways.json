@@ -1,0 +1,74 @@
+{
+  "resources": [
+    {
+      "resource_id": "omniroute",
+      "name": "OmniRoute",
+      "type": "model-gateway",
+      "version": "v3.8.50",
+      "source": "github.com/diegosouzapw/OmniRoute",
+      "license": "MIT",
+      "capabilities": [
+        "352-providers",
+        "150-plus-free-tiers",
+        "auto-failover",
+        "19-routing-strategies",
+        "token-compression-15-95-percent",
+        "mcp-110-tools",
+        "a2a-protocols",
+        "quota-tracking",
+        "stealth-tls"
+      ],
+      "runtime": "Node.js 22+ / Docker / Bun",
+      "deployment": "npm i -g omniroute && omniroute",
+      "status": "REGISTERED",
+      "integration": "core-model-gateway",
+      "port": 20128,
+      "notes": "Primary model gateway. Auto-failover across 352 providers. ~1.47B free tokens/month."
+    },
+    {
+      "resource_id": "freellmapi",
+      "name": "FreeLLMAPI",
+      "type": "model-gateway",
+      "version": "latest",
+      "source": "github.com/tashfeenahmed/freellmapi",
+      "license": "MIT",
+      "capabilities": [
+        "7.4B-tokens-monthly",
+        "34-providers",
+        "635-free-endpoints",
+        "auto-failover",
+        "per-key-rate-tracking",
+        "self-updating-catalog",
+        "anthropic-messages-api",
+        "ollama-emulation",
+        "fusion-multi-model-synthesis"
+      ],
+      "runtime": "Node.js 20+ / Docker",
+      "deployment": "curl -fsSL https://freellmapi.co/install.sh | bash",
+      "status": "REGISTERED",
+      "integration": "secondary-model-gateway",
+      "port": 3001,
+      "notes": "Secondary gateway with Anthropic-native wire format. Good for Claude Code compatibility."
+    },
+    {
+      "resource_id": "awesome-freellm-apis",
+      "name": "Awesome Free LLM APIs",
+      "type": "provider-catalog",
+      "version": "daily-updated",
+      "source": "github.com/open-free-llm-api/awesome-freellm-apis",
+      "license": "MIT",
+      "capabilities": [
+        "482-plus-free-apis",
+        "31-providers",
+        "machine-readable-directory",
+        "rate-limits",
+        "context-windows",
+        "one-click-configs"
+      ],
+      "runtime": "static-data",
+      "status": "INTEGRATED",
+      "integration": "provider-discovery-catalog",
+      "notes": "Reference catalog. No runtime — data only."
+    }
+  ]
+}

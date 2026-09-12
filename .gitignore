@@ -1,0 +1,12 @@
+node_modules/
+.env
+*.db
+*.db-shm
+*.db-wal
+.cache/
+*.log
+.DS_Store
+aws-credentials.json
+backend/package-lock.json
+model-gateway.json
+resource-registry/credentials.json
