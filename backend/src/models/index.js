@@ -32,10 +32,21 @@ export class ModelGateway {
         notes: '80M free tokens/month'
       },
       {
+        name: 'free-claude-code',
+        apiKey: process.env.FCC_KEY || '',
+        baseUrl: process.env.FCC_URL || 'http://localhost:8080/v1',
+        priority: 3,
+        status: 'standby',
+        lastError: null,
+        errorCount: 0,
+        free_tokens: 1300000000,
+        notes: '1.3B free tokens/month, 50 providers'
+      },
+      {
         name: 'omniroute',
         apiKey: process.env.OMNIROUTE_KEY || '',
         baseUrl: process.env.OMNIROUTE_URL || 'http://localhost:20128/v1',
-        priority: 3,
+        priority: 4,
         status: 'standby',
         lastError: null,
         errorCount: 0
@@ -44,7 +55,7 @@ export class ModelGateway {
         name: 'freellmapi',
         apiKey: process.env.FREELLMAPI_KEY || '',
         baseUrl: process.env.FREELLMAPI_URL || 'http://localhost:3001/v1',
-        priority: 4,
+        priority: 5,
         status: 'standby',
         lastError: null,
         errorCount: 0

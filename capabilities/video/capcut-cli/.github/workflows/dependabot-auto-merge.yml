@@ -1,0 +1,17 @@
+# Managed by prq (`prq bootstrap`). Policy lives in the reusable workflow:
+# https://github.com/renezander030/.github/blob/main/.github/workflows/dependabot-auto-merge.yml
+# Edit policy there, not here.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    uses: renezander030/.github/.github/workflows/dependabot-auto-merge.yml@main
+    secrets: inherit

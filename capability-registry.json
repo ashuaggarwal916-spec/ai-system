@@ -164,23 +164,91 @@
       "capabilities": ["165-scientific-skills", "cancer-genomics", "1000-genomes", "pathogen-surveillance", "pk-pd-modelling", "drug-target-binding", "molecular-dynamics", "rna-velocity", "microbiome", "geospatial", "time-series", "hugging-science", "78-databases"],
       "brain_integration": { "module": "research", "auto_detect": true, "triggers": ["science", "research", "genomics", "cancer", "drug", "molecular", "rna", "microbiome", "geospatial", "time series", "database"] },
       "installed_at": "2026-09-12"
+    },
+    {
+      "id": "free-claude-code",
+      "name": "Free Claude Code",
+      "category": "ai",
+      "source": "github.com/Alishahryar1/free-claude-code",
+      "path": "capabilities/ai/free-claude-code",
+      "status": "active",
+      "capabilities": ["1.3b-free-tokens", "50-providers", "10-coding-agents", "rtk-compression", "auto-failover", "voice-notes", "browser-code", "telegram", "discord", "jetbrains"],
+      "brain_integration": { "module": "providers", "auto_detect": true, "triggers": ["claude", "codex", "coding agent", "provider", "token", "free"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "ruflo",
+      "name": "Ruflo",
+      "category": "ai",
+      "source": "github.com/ruvnet/ruflo",
+      "path": "capabilities/ai/ruflo",
+      "status": "active",
+      "capabilities": ["agent-swarm", "100-specialized-agents", "self-learning-memory", "federated-comms", "claude-code-plugin", "codex-plugin", "goal-planner", "live-agents", "agentic-db"],
+      "brain_integration": { "module": "agents", "auto_detect": true, "triggers": ["swarm", "multi-agent", "agents", "team", "parallel", "coordinate", "orchestrate"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "capcut-cli",
+      "name": "CapCut CLI",
+      "category": "video",
+      "source": "github.com/renezander030/capcut-cli",
+      "path": "capabilities/video/capcut-cli",
+      "status": "active",
+      "capabilities": ["video-editing", "capcut", "jianying", "captions", "silence-detection", "ai-powered", "wasm-tool", "no-server", "local-draft"],
+      "brain_integration": { "module": "video", "auto_detect": true, "triggers": ["capcut", "jianying", "video edit", "caption", "silence cut"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "strix",
+      "name": "Strix Pentesting",
+      "category": "security",
+      "source": "github.com/usestrix/strix",
+      "path": "capabilities/security/strix",
+      "status": "active",
+      "capabilities": ["ai-pentesting", "vulnerability-scanning", "owasp-top-10", "api-security", "web-app-security", "code-review", "sarif-output", "ci-integration", "self-hosted", "cloud-managed"],
+      "brain_integration": { "module": "security", "auto_detect": true, "triggers": ["security", "pentest", "vulnerability", "owasp", "scan", "hack", "exploit", "audit"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "karpathy-skills",
+      "name": "Karpathy Skills",
+      "category": "skills",
+      "source": "github.com/multica-ai/andrej-karpathy-skills",
+      "path": "capabilities/skills/karpathy-skills",
+      "status": "active",
+      "capabilities": ["think-before-coding", "simplicity-first", "surgical-changes", "goal-driven-execution", "4-principles"],
+      "brain_integration": { "module": "coding", "auto_detect": true, "triggers": ["code", "implement", "build", "create", "develop"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "threeui",
+      "name": "ThreeUI",
+      "category": "ui",
+      "source": "threeui.com",
+      "path": "capabilities/ui/threeui.md",
+      "status": "active",
+      "capabilities": ["160-threejs-components", "3d-hero-sections", "interactive-shaders", "ui-elements", "motion-design", "mcp-access", "landing-page-templates"],
+      "brain_integration": { "module": "ui", "auto_detect": true, "triggers": ["3d", "threejs", "hero", "animation", "motion", "shader", "landing page", "ui component"] },
+      "installed_at": "2026-09-12"
     }
   ],
   "stats": {
-    "total_capabilities": 15,
+    "total_capabilities": 19,
     "by_category": {
-      "ai": 3,
+      "ai": 5,
       "voice": 1,
       "api": 1,
       "directory": 1,
       "research": 2,
       "social": 2,
       "content": 1,
-      "skills": 1,
+      "skills": 2,
       "mcp": 1,
-      "video": 1,
-      "design": 1
+      "video": 2,
+      "design": 1,
+      "security": 1,
+      "ui": 1
     }
   },
-  "notes": "Instagram reel DdE2GlYw9lB could not be extracted (Instagram blocks automated access)"
+  "notes": "Instagram reel DdE2GlYw9lB could not be extracted. ThreeUI MCP endpoint returned no content but site was scraped for component catalog."
 }

@@ -1,0 +1,5712 @@
+{
+  "name": "capcut-cli",
+  "version": "0.23.0",
+  "schema_version": 2,
+  "description": "Edit CapCut/JianYing draft_content.json directly. JSON in, JSON out.",
+  "global_flags": [
+    {
+      "name": "human",
+      "flags": [
+        "-H",
+        "--human"
+      ],
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Human-readable output instead of JSON."
+    },
+    {
+      "name": "quiet",
+      "flags": [
+        "-q",
+        "--quiet"
+      ],
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Suppress stdout on success."
+    },
+    {
+      "name": "version",
+      "flags": [
+        "-v",
+        "--version"
+      ],
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Print the installed CLI version."
+    },
+    {
+      "name": "dry_run",
+      "flags": [
+        "--dry-run"
+      ],
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Preview a mutating command without writing."
+    },
+    {
+      "name": "jianying",
+      "flags": [
+        "--jianying"
+      ],
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Use the JianYing enum namespace."
+    },
+    {
+      "name": "force_write",
+      "flags": [
+        "--force-write"
+      ],
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Override editor-running, changed-on-disk, and version-boundary safety checks."
+    }
+  ],
+  "commands": [
+    {
+      "name": "info",
+      "summary": "Project overview + material summary.",
+      "usage": "capcut info <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "version",
+      "summary": "Detect CapCut/JianYing version, schema flags, and support status.",
+      "usage": "capcut version <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "lint",
+      "summary": "Schema-aware checks (overlaps, line length, missing files, main-track gaps, external media); exit 0/1/2 for CI.",
+      "usage": "capcut lint <project> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "max_chars",
+          "flags": [
+            "--max-chars"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Maximum caption characters per line.",
+          "default": 42
+        },
+        {
+          "name": "max_cue_secs",
+          "flags": [
+            "--max-cue-secs"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Maximum caption duration in seconds.",
+          "default": 7
+        },
+        {
+          "name": "min_gap_ms",
+          "flags": [
+            "--min-gap-ms"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Minimum caption gap in milliseconds.",
+          "default": 0
+        },
+        {
+          "name": "max_cps",
+          "flags": [
+            "--max-cps"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Maximum caption reading speed in characters per second (0 disables).",
+          "default": 20
+        },
+        {
+          "name": "safe_area",
+          "flags": [
+            "--safe-area"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Vertical safe-area fraction for captions (0 disables).",
+          "default": 0.85
+        },
+        {
+          "name": "no_check_paths",
+          "flags": [
+            "--no-check-paths"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Skip local media path checks."
+        },
+        {
+          "name": "fix",
+          "flags": [
+            "--fix"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Mechanically repair fixable issues and write the draft."
+        },
+        {
+          "name": "no_probe",
+          "flags": [
+            "--no-probe"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Skip ffprobe media checks (VFR / unreadable media)."
+        },
+        {
+          "name": "pip",
+          "flags": [
+            "--pip"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Validate the PIP + local-mask workflow (issue #78): report overlay / overlay-keyframe / mask-attachment counts and missing media by path, and fail the exit code on an orphaned (never-attached) mask."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure",
+        "2": "lint errors"
+      }
+    },
+    {
+      "name": "tracks",
+      "summary": "List all tracks.",
+      "usage": "capcut tracks <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "array",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "segments",
+      "summary": "List segments with timing; filter by --track <type>.",
+      "usage": "capcut segments <project> [--track <type>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "track",
+          "flags": [
+            "--track",
+            "--type"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Track or material type filter."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "array",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "texts",
+      "summary": "List all text/subtitle content.",
+      "usage": "capcut texts <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "array",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "set-text",
+      "summary": "Change a text segment's content.",
+      "usage": "capcut set-text <project> <id> <text>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "shift",
+      "summary": "Shift one segment's timing by an offset (e.g. +0.5s).",
+      "usage": "capcut shift <project> <id> <offset>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "offset",
+          "type": "time",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "shift-all",
+      "summary": "Shift all segments (optionally on one --track) by an offset.",
+      "usage": "capcut shift-all <project> <offset> [--track <type>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "offset",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "track",
+          "flags": [
+            "--track",
+            "--type"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Track or material type filter."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "speed",
+      "summary": "Set a segment's playback speed.",
+      "usage": "capcut speed <project> <id> <multiplier>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "multiplier",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "volume",
+      "summary": "Set a segment's volume (0.0-1.0).",
+      "usage": "capcut volume <project> <id> <level>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "level",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "trim",
+      "summary": "Trim a segment to a start/duration window.",
+      "usage": "capcut trim <project> <id> <start> <duration>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "opacity",
+      "summary": "Set a segment's opacity (0.0-1.0).",
+      "usage": "capcut opacity <project> <id> <alpha>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "alpha",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "export-srt",
+      "summary": "Export subtitles to SRT or WebVTT on stdout, per line or per word.",
+      "usage": "capcut export-srt <project> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "granularity",
+          "flags": [
+            "--granularity"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Cue granularity: one cue per caption or per word.",
+          "values": [
+            "line",
+            "word"
+          ],
+          "default": "line"
+        },
+        {
+          "name": "format",
+          "flags": [
+            "--format"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Subtitle output format.",
+          "values": [
+            "srt",
+            "vtt"
+          ],
+          "default": "srt"
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "text",
+        "description": "Plain text on stdout."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "export-ass",
+      "summary": "Export styled ASS subtitles on stdout or --out, with per-range overrides and --karaoke word timing.",
+      "usage": "capcut export-ass <project> [--karaoke] [--out <file.ass>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "file.ass",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "karaoke",
+          "flags": [
+            "--karaoke"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Emit {\\k} word timing per Dialogue (stored word timings where present, interpolated elsewhere)."
+        },
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "text",
+        "description": "Plain text on stdout."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "export-timeline",
+      "summary": "Export video/audio tracks as OpenTimelineIO JSON for NLE handoff (DaVinci Resolve imports .otio natively).",
+      "usage": "capcut export-timeline <project> [--out <file.otio>] [--captions skip|markers]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "file.otio",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        },
+        {
+          "name": "captions",
+          "flags": [
+            "--captions"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Text/caption tracks: skip them with a note (default), or write every cue as an OTIO timeline marker on the Stack (name = text, marked_range = timing, metadata.capcut.kind = caption) — Resolve/Premiere import those as timeline markers and import-timeline rebuilds the text track from them.",
+          "values": [
+            "skip",
+            "markers"
+          ],
+          "default": "skip"
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "text",
+        "description": "Plain text on stdout."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "import-timeline",
+      "summary": "Import OpenTimelineIO JSON (the export-timeline schema set) as a new draft (--out) or append it onto an existing one (--into); unsupported OTIO features are reported, never silent.",
+      "usage": "capcut import-timeline <file.otio> (--out <new-project> | --into <project>)",
+      "positionals": [
+        {
+          "name": "file.otio",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "new-project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Build a NEW draft directory at this path from the OTIO timeline."
+        },
+        {
+          "name": "into",
+          "flags": [
+            "--into"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Append the OTIO timeline onto this existing draft as new tracks (existing segments are never touched)."
+        },
+        {
+          "name": "template",
+          "flags": [
+            "--template"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Template directory for --out."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "file",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "materials",
+      "summary": "List material types and counts; filter with --type.",
+      "usage": "capcut materials <project> [--type <type>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "track",
+          "flags": [
+            "--track",
+            "--type"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Track or material type filter."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "array",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "segment",
+      "summary": "Full detail for one segment and its material.",
+      "usage": "capcut segment <project> <id>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "material",
+      "summary": "Full detail for one material.",
+      "usage": "capcut material <project> <id>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-audio",
+      "summary": "Add a local or Wikimedia audio file on an audio track.",
+      "usage": "capcut add-audio <project> <file-or-url> <start> [duration] [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "file-or-url",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "volume",
+          "flags": [
+            "--volume"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Audio volume.",
+          "default": 1
+        },
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "force_license",
+          "flags": [
+            "--force-license"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Allow restrictive or unknown Wikimedia licenses."
+        },
+        {
+          "name": "no_probe",
+          "flags": [
+            "--no-probe"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Disable automatic media probing."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [
+        "ffprobe (optional)",
+        "network for Wikimedia URLs only"
+      ],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-video",
+      "summary": "Add a local or Wikimedia video/image on a video track.",
+      "usage": "capcut add-video <project> <file-or-url> <start> [duration] [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "file-or-url",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "width",
+          "flags": [
+            "--width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Source width."
+        },
+        {
+          "name": "height",
+          "flags": [
+            "--height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Source height."
+        },
+        {
+          "name": "force_license",
+          "flags": [
+            "--force-license"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Allow restrictive or unknown Wikimedia licenses."
+        },
+        {
+          "name": "no_probe",
+          "flags": [
+            "--no-probe"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Disable automatic media probing."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [
+        "ffprobe (optional)",
+        "network for Wikimedia URLs only"
+      ],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-text",
+      "summary": "Add a text segment with font/color/position options.",
+      "usage": "capcut add-text <project> <start> <duration> <text> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "font_size",
+          "flags": [
+            "--font-size"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Font size."
+        },
+        {
+          "name": "color",
+          "flags": [
+            "--color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Text colour as #RRGGBB."
+        },
+        {
+          "name": "align",
+          "flags": [
+            "--align"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Text alignment.",
+          "values": [
+            "0",
+            "1",
+            "2"
+          ]
+        },
+        {
+          "name": "x",
+          "flags": [
+            "--x"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Horizontal position."
+        },
+        {
+          "name": "y",
+          "flags": [
+            "--y"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Vertical position."
+        },
+        {
+          "name": "preset",
+          "flags": [
+            "--preset"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Apply a make-preset style preset; explicit flags override preset values."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "tts",
+      "summary": "Synthesize a voiceover from text via a local TTS command (--tts-cmd) and add it as an audio segment.",
+      "usage": "capcut tts <project> [start] [duration] (--text <string> | --text-file <path>) --tts-cmd <template> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "string",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": false
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "text",
+          "flags": [
+            "--text"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Voiceover text to synthesize."
+        },
+        {
+          "name": "text_file",
+          "flags": [
+            "--text-file"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Read the voiceover text from this file."
+        },
+        {
+          "name": "tts_cmd",
+          "flags": [
+            "--tts-cmd"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "TTS command template, run without a shell: {out} (required) is replaced with the .wav path the tool must write, {text} with the text as one argument; without {text} the text is piped to stdin."
+        },
+        {
+          "name": "volume",
+          "flags": [
+            "--volume"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Audio volume.",
+          "default": 1
+        },
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "no_probe",
+          "flags": [
+            "--no-probe"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Disable automatic media probing."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [
+        "ffprobe (optional)",
+        "a local TTS CLI via --tts-cmd"
+      ],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "crop",
+      "summary": "Read or set a video/photo segment's source-material crop (--ratio preset, --rect x,y,w,h, or --reset).",
+      "usage": "capcut crop <project> <segment-id> [--ratio <r> | --rect <x,y,w,h> | --reset]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "segment-id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "r",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "ratio",
+          "flags": [
+            "--ratio"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Centered maximal crop of this aspect against the source material's stored width/height.",
+          "values": [
+            "free",
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ]
+        },
+        {
+          "name": "rect",
+          "flags": [
+            "--rect"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Explicit normalized crop rect x,y,w,h (0..1); overrides --ratio."
+        },
+        {
+          "name": "reset",
+          "flags": [
+            "--reset"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Restore the full frame."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "cut",
+      "summary": "Extract a time range into a new standalone draft.",
+      "usage": "capcut cut <project> <start> <end> --out <path>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "end",
+          "type": "time",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "file",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "duplicate",
+      "summary": "Duplicate a segment at its same timeline position onto a track above the source.",
+      "usage": "capcut duplicate <project> <segment-id> [--track <track-name>] [--new-track]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "segment-id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "track-name",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "track",
+          "flags": [
+            "--track"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Place the copy onto this existing same-type track; errors when the target range is occupied there."
+        },
+        {
+          "name": "new_track",
+          "flags": [
+            "--new-track"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Create a fresh same-type track directly above the source (the default)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "remove",
+      "summary": "Remove a segment, its emptied track, and the materials that orphans.",
+      "usage": "capcut remove <project> <segment-id> [--keep-track] [--keep-materials]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "segment-id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "keep_track",
+          "flags": [
+            "--keep-track"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Keep the segment's track even when it becomes empty."
+        },
+        {
+          "name": "keep_materials",
+          "flags": [
+            "--keep-materials"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Skip the orphan-material sweep (run prune later)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "keyframe",
+      "summary": "Add a keyframe (position/scale/rotation/alpha/volume); single or --batch.",
+      "usage": "capcut keyframe <project> <id> <property> <time> <value> [--easing <name>] | --batch",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "property",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "time",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "batch",
+          "flags": [
+            "--batch"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Read JSONL keyframes from stdin."
+        },
+        {
+          "name": "easing",
+          "flags": [
+            "--easing"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Interpolation easing to adjacent keyframes. Needs an adjacent keyframe on the same property; a lone eased keyframe stays linear (warns). hold = step: the value is held by a helper keyframe one frame before the next keyframe on that property (needs a later keyframe; warns otherwise).",
+          "values": [
+            "linear",
+            "ease-in",
+            "ease-out",
+            "ease-in-out",
+            "hold"
+          ],
+          "default": "linear"
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "transition",
+      "summary": "Add a transition between segments.",
+      "usage": "capcut transition <project> <id> <slug> [--duration <time>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "slug",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "time",
+          "type": "time",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "duration",
+          "flags": [
+            "--duration"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Transition duration."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "mask",
+      "summary": "Apply a mask (linear/circle/heart/...) with geometry flags, or --off.",
+      "usage": "capcut mask <project> <id> <slug> [options] | --off",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "slug",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "off",
+          "flags": [
+            "--off"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Remove masks."
+        },
+        {
+          "name": "center_x",
+          "flags": [
+            "--center-x"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Mask centre X."
+        },
+        {
+          "name": "center_y",
+          "flags": [
+            "--center-y"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Mask centre Y."
+        },
+        {
+          "name": "size",
+          "flags": [
+            "--size"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Mask size."
+        },
+        {
+          "name": "rotation",
+          "flags": [
+            "--rotation"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Mask rotation."
+        },
+        {
+          "name": "feather",
+          "flags": [
+            "--feather"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Mask feather."
+        },
+        {
+          "name": "invert",
+          "flags": [
+            "--invert"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Invert mask."
+        },
+        {
+          "name": "rect_width",
+          "flags": [
+            "--rect-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Rectangle width."
+        },
+        {
+          "name": "round_corner",
+          "flags": [
+            "--round-corner"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Rectangle corner radius."
+        },
+        {
+          "name": "mask_field",
+          "flags": [
+            "--mask-field"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Materials array to write the mask into (default: auto — an already-populated variant, else version evidence).",
+          "values": [
+            "masks",
+            "common_mask",
+            "common_masks"
+          ]
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "bg-blur",
+      "summary": "Set background blur level 1-4, or --off.",
+      "usage": "capcut bg-blur <project> <id> <level> | --off",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "level",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "off",
+          "flags": [
+            "--off"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Remove background blur."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "text-style",
+      "summary": "Style text (alpha/shadow/border/background box).",
+      "usage": "capcut text-style <project> <id> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "font_size",
+          "flags": [
+            "--font-size"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Font size."
+        },
+        {
+          "name": "color",
+          "flags": [
+            "--color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Text colour as #RRGGBB."
+        },
+        {
+          "name": "align",
+          "flags": [
+            "--align"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Text alignment.",
+          "values": [
+            "0",
+            "1",
+            "2"
+          ]
+        },
+        {
+          "name": "x",
+          "flags": [
+            "--x"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Horizontal position."
+        },
+        {
+          "name": "y",
+          "flags": [
+            "--y"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Vertical position."
+        },
+        {
+          "name": "alpha",
+          "flags": [
+            "--alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Text alpha."
+        },
+        {
+          "name": "vertical",
+          "flags": [
+            "--vertical"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Use vertical text."
+        },
+        {
+          "name": "fixed_width",
+          "flags": [
+            "--fixed-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fixed text-box width."
+        },
+        {
+          "name": "fixed_height",
+          "flags": [
+            "--fixed-height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fixed text-box height."
+        },
+        {
+          "name": "shadow",
+          "flags": [
+            "--shadow",
+            "--no-shadow"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Enable or disable shadow."
+        },
+        {
+          "name": "shadow_alpha",
+          "flags": [
+            "--shadow-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow alpha."
+        },
+        {
+          "name": "shadow_angle",
+          "flags": [
+            "--shadow-angle"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow angle."
+        },
+        {
+          "name": "shadow_color",
+          "flags": [
+            "--shadow-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Shadow colour."
+        },
+        {
+          "name": "shadow_distance",
+          "flags": [
+            "--shadow-distance"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow distance."
+        },
+        {
+          "name": "shadow_smoothing",
+          "flags": [
+            "--shadow-smoothing"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow smoothing."
+        },
+        {
+          "name": "border_width",
+          "flags": [
+            "--border-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Border width."
+        },
+        {
+          "name": "border_color",
+          "flags": [
+            "--border-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Border colour."
+        },
+        {
+          "name": "border_alpha",
+          "flags": [
+            "--border-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Border alpha."
+        },
+        {
+          "name": "bg_color",
+          "flags": [
+            "--bg-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Background colour."
+        },
+        {
+          "name": "bg_alpha",
+          "flags": [
+            "--bg-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background alpha."
+        },
+        {
+          "name": "bg_style",
+          "flags": [
+            "--bg-style"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background style identifier."
+        },
+        {
+          "name": "bg_round_radius",
+          "flags": [
+            "--bg-round-radius"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background corner radius."
+        },
+        {
+          "name": "bg_width",
+          "flags": [
+            "--bg-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background width."
+        },
+        {
+          "name": "bg_height",
+          "flags": [
+            "--bg-height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background height."
+        },
+        {
+          "name": "bg_h_offset",
+          "flags": [
+            "--bg-h-offset"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background horizontal offset."
+        },
+        {
+          "name": "bg_v_offset",
+          "flags": [
+            "--bg-v-offset"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background vertical offset."
+        },
+        {
+          "name": "preset",
+          "flags": [
+            "--preset"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Apply a make-preset style preset; explicit flags override preset values."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "text-anim",
+      "summary": "Add intro/outro/combo text animation.",
+      "usage": "capcut text-anim <project> <id> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "intro",
+          "flags": [
+            "--intro"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Intro animation."
+        },
+        {
+          "name": "outro",
+          "flags": [
+            "--outro"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Outro animation."
+        },
+        {
+          "name": "combo",
+          "flags": [
+            "--combo"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Loop/combo animation."
+        },
+        {
+          "name": "intro_duration",
+          "flags": [
+            "--intro-duration"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Intro duration."
+        },
+        {
+          "name": "outro_duration",
+          "flags": [
+            "--outro-duration"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Outro duration."
+        },
+        {
+          "name": "combo_duration",
+          "flags": [
+            "--combo-duration"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Combo duration."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "image-anim",
+      "summary": "Add intro/outro/combo animation to an image/video segment.",
+      "usage": "capcut image-anim <project> <id> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "intro",
+          "flags": [
+            "--intro"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Intro animation."
+        },
+        {
+          "name": "outro",
+          "flags": [
+            "--outro"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Outro animation."
+        },
+        {
+          "name": "combo",
+          "flags": [
+            "--combo"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Loop/combo animation."
+        },
+        {
+          "name": "intro_duration",
+          "flags": [
+            "--intro-duration"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Intro duration."
+        },
+        {
+          "name": "outro_duration",
+          "flags": [
+            "--outro-duration"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Outro duration."
+        },
+        {
+          "name": "combo_duration",
+          "flags": [
+            "--combo-duration"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Combo duration."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-sticker",
+      "summary": "Add a sticker on its own track with transform.",
+      "usage": "capcut add-sticker <project> <resource-id> <start> <duration> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "resource-id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "x",
+          "flags": [
+            "--x"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Horizontal position."
+        },
+        {
+          "name": "y",
+          "flags": [
+            "--y"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Vertical position."
+        },
+        {
+          "name": "scale",
+          "flags": [
+            "--scale"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Uniform scale."
+        },
+        {
+          "name": "rotation",
+          "flags": [
+            "--rotation"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Rotation."
+        },
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "mix-mode",
+      "summary": "Set a video segment's blend mode.",
+      "usage": "capcut mix-mode <project> <id> <mode>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "audio-fade",
+      "summary": "Add fade-in/fade-out to an audio segment (--in / --fade-out).",
+      "usage": "capcut audio-fade <project> <id> [--in <seconds>] [--fade-out <seconds>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "seconds",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "fade_in",
+          "flags": [
+            "--in",
+            "--fade-in"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fade-in seconds."
+        },
+        {
+          "name": "fade_out",
+          "flags": [
+            "--fade-out"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fade-out seconds."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-cover",
+      "summary": "Set the project cover/thumbnail from a local image.",
+      "usage": "capcut add-cover <project> <image> [--time <milliseconds>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "image",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "milliseconds",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "time",
+          "flags": [
+            "--time"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Cover timestamp in milliseconds."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-filter",
+      "summary": "Add a colour filter on its own track.",
+      "usage": "capcut add-filter <project> <slug-or-name> (<start> <duration> | --full) [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "slug-or-name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "resource_id",
+          "flags": [
+            "--resource-id"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Raw catalogue resource ID (skips slug lookup)."
+        },
+        {
+          "name": "effect_id",
+          "flags": [
+            "--effect-id"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Raw effect ID (defaults to --resource-id)."
+        },
+        {
+          "name": "intensity",
+          "flags": [
+            "--intensity"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Filter strength 0-1 (default 1)."
+        },
+        {
+          "name": "full",
+          "flags": [
+            "--full"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Apply to the whole timeline (start 0, duration = draft duration).",
+          "default": false
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "bubble-text",
+      "summary": "Apply a speech-bubble shape to a text segment.",
+      "usage": "capcut bubble-text <project> <id> --bubble <slug>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "bubble",
+          "flags": [
+            "--bubble"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Bubble slug."
+        },
+        {
+          "name": "effect_id",
+          "flags": [
+            "--effect-id"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Custom effect ID."
+        },
+        {
+          "name": "resource_id",
+          "flags": [
+            "--resource-id"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Custom resource ID."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-effect",
+      "summary": "Add a scene effect on its own track.",
+      "usage": "capcut add-effect <project> <slug-or-name> (<start> <duration> | --full) [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "slug-or-name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "params",
+          "flags": [
+            "--params"
+          ],
+          "type": "json",
+          "required": false,
+          "description": "Effect parameter array."
+        },
+        {
+          "name": "resource_id",
+          "flags": [
+            "--resource-id"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Raw catalogue resource ID (skips slug lookup)."
+        },
+        {
+          "name": "effect_id",
+          "flags": [
+            "--effect-id"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Raw effect ID (defaults to --resource-id)."
+        },
+        {
+          "name": "intensity",
+          "flags": [
+            "--intensity"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Effect strength 0-1 (default 1)."
+        },
+        {
+          "name": "full",
+          "flags": [
+            "--full"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Apply to the whole timeline (start 0, duration = draft duration).",
+          "default": false
+        },
+        {
+          "name": "bind",
+          "flags": [
+            "--bind"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Experimental: attach to one segment instead of the whole frame (segment ID)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "save-template",
+      "summary": "Extract a segment as a reusable template JSON.",
+      "usage": "capcut save-template <project> <id> <name> --out <path>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "file",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "apply-template",
+      "summary": "Stamp a template into a project with new timing/text.",
+      "usage": "capcut apply-template <project> <template> <start> <duration> [text] [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "template",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "x",
+          "flags": [
+            "--x"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Horizontal position override."
+        },
+        {
+          "name": "y",
+          "flags": [
+            "--y"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Vertical position override."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "make-preset",
+      "summary": "Extract a text segment's styling as a reusable preset JSON (apply via --preset).",
+      "usage": "capcut make-preset <project> <text-segment-id> --out <preset.json>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "text-segment-id",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "file",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "templates",
+      "summary": "List bundled reusable templates.",
+      "usage": "capcut templates <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "array",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "batch",
+      "summary": "Run multiple edits from stdin (JSONL), one file write.",
+      "usage": "capcut batch <project> [--continue-on-error] < operations.jsonl",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "continue_on_error",
+          "flags": [
+            "--continue-on-error"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Commit only successful operations and exit 1 if any fail."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "import-srt",
+      "summary": "Import an SRT file/stdin as one text segment per cue.",
+      "usage": "capcut import-srt <project> <srt-or-> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "srt-or-",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "style_ref",
+          "flags": [
+            "--style-ref"
+          ],
+          "type": "id",
+          "required": false,
+          "description": "Copy styling from this text segment."
+        },
+        {
+          "name": "clone_style",
+          "flags": [
+            "--clone-style"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Copy styling from the draft's newest existing caption (target track first, any text track as fallback) — --style-ref without having to look the segment id up. An explicit --style-ref wins."
+        },
+        {
+          "name": "time_offset",
+          "flags": [
+            "--time-offset"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Shift imported cues."
+        },
+        {
+          "name": "font_size",
+          "flags": [
+            "--font-size"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Font size."
+        },
+        {
+          "name": "color",
+          "flags": [
+            "--color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Text colour as #RRGGBB."
+        },
+        {
+          "name": "align",
+          "flags": [
+            "--align"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Text alignment.",
+          "values": [
+            "0",
+            "1",
+            "2"
+          ]
+        },
+        {
+          "name": "x",
+          "flags": [
+            "--x"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Horizontal position."
+        },
+        {
+          "name": "y",
+          "flags": [
+            "--y"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Vertical position."
+        },
+        {
+          "name": "alpha",
+          "flags": [
+            "--alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Text alpha."
+        },
+        {
+          "name": "vertical",
+          "flags": [
+            "--vertical"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Use vertical text."
+        },
+        {
+          "name": "fixed_width",
+          "flags": [
+            "--fixed-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fixed text-box width."
+        },
+        {
+          "name": "fixed_height",
+          "flags": [
+            "--fixed-height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fixed text-box height."
+        },
+        {
+          "name": "shadow",
+          "flags": [
+            "--shadow",
+            "--no-shadow"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Enable or disable shadow."
+        },
+        {
+          "name": "shadow_alpha",
+          "flags": [
+            "--shadow-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow alpha."
+        },
+        {
+          "name": "shadow_angle",
+          "flags": [
+            "--shadow-angle"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow angle."
+        },
+        {
+          "name": "shadow_color",
+          "flags": [
+            "--shadow-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Shadow colour."
+        },
+        {
+          "name": "shadow_distance",
+          "flags": [
+            "--shadow-distance"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow distance."
+        },
+        {
+          "name": "shadow_smoothing",
+          "flags": [
+            "--shadow-smoothing"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow smoothing."
+        },
+        {
+          "name": "border_width",
+          "flags": [
+            "--border-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Border width."
+        },
+        {
+          "name": "border_color",
+          "flags": [
+            "--border-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Border colour."
+        },
+        {
+          "name": "border_alpha",
+          "flags": [
+            "--border-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Border alpha."
+        },
+        {
+          "name": "bg_color",
+          "flags": [
+            "--bg-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Background colour."
+        },
+        {
+          "name": "bg_alpha",
+          "flags": [
+            "--bg-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background alpha."
+        },
+        {
+          "name": "bg_style",
+          "flags": [
+            "--bg-style"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background style identifier."
+        },
+        {
+          "name": "bg_round_radius",
+          "flags": [
+            "--bg-round-radius"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background corner radius."
+        },
+        {
+          "name": "bg_width",
+          "flags": [
+            "--bg-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background width."
+        },
+        {
+          "name": "bg_height",
+          "flags": [
+            "--bg-height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background height."
+        },
+        {
+          "name": "bg_h_offset",
+          "flags": [
+            "--bg-h-offset"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background horizontal offset."
+        },
+        {
+          "name": "bg_v_offset",
+          "flags": [
+            "--bg-v-offset"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background vertical offset."
+        },
+        {
+          "name": "color_cycle",
+          "flags": [
+            "--color-cycle"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Rotate the base text colour per cue: comma-separated #RRGGBB list, in order. Wins over --color per cue; independent of keyword emphasis."
+        },
+        {
+          "name": "highlight_words",
+          "flags": [
+            "--highlight-words"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Emphasize case-insensitive whole-word matches per cue: comma-separated words, or @file with one word/phrase per line."
+        },
+        {
+          "name": "keyword_color",
+          "flags": [
+            "--keyword-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Emphasis colour for --highlight-words matches.",
+          "default": "#FFD700"
+        },
+        {
+          "name": "keyword_size",
+          "flags": [
+            "--keyword-size"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Emphasis size for --highlight-words matches, as a multiplier on the cue's base font size.",
+          "default": 1.2
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "import-ass",
+      "summary": "Import an ASS/SSA subtitle file as text segments, keeping inline overrides as per-range styles.",
+      "usage": "capcut import-ass <project> <ass-or-> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "ass-or-",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "style_ref",
+          "flags": [
+            "--style-ref"
+          ],
+          "type": "id",
+          "required": false,
+          "description": "Copy styling from this text segment."
+        },
+        {
+          "name": "clone_style",
+          "flags": [
+            "--clone-style"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Copy styling from the draft's newest existing caption (target track first, any text track as fallback) — --style-ref without having to look the segment id up. An explicit --style-ref wins."
+        },
+        {
+          "name": "time_offset",
+          "flags": [
+            "--time-offset"
+          ],
+          "type": "time",
+          "required": false,
+          "description": "Shift imported cues."
+        },
+        {
+          "name": "font_size",
+          "flags": [
+            "--font-size"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Font size."
+        },
+        {
+          "name": "color",
+          "flags": [
+            "--color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Text colour as #RRGGBB."
+        },
+        {
+          "name": "align",
+          "flags": [
+            "--align"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Text alignment.",
+          "values": [
+            "0",
+            "1",
+            "2"
+          ]
+        },
+        {
+          "name": "x",
+          "flags": [
+            "--x"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Horizontal position."
+        },
+        {
+          "name": "y",
+          "flags": [
+            "--y"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Vertical position."
+        },
+        {
+          "name": "alpha",
+          "flags": [
+            "--alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Text alpha."
+        },
+        {
+          "name": "vertical",
+          "flags": [
+            "--vertical"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Use vertical text."
+        },
+        {
+          "name": "fixed_width",
+          "flags": [
+            "--fixed-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fixed text-box width."
+        },
+        {
+          "name": "fixed_height",
+          "flags": [
+            "--fixed-height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Fixed text-box height."
+        },
+        {
+          "name": "shadow",
+          "flags": [
+            "--shadow",
+            "--no-shadow"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Enable or disable shadow."
+        },
+        {
+          "name": "shadow_alpha",
+          "flags": [
+            "--shadow-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow alpha."
+        },
+        {
+          "name": "shadow_angle",
+          "flags": [
+            "--shadow-angle"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow angle."
+        },
+        {
+          "name": "shadow_color",
+          "flags": [
+            "--shadow-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Shadow colour."
+        },
+        {
+          "name": "shadow_distance",
+          "flags": [
+            "--shadow-distance"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow distance."
+        },
+        {
+          "name": "shadow_smoothing",
+          "flags": [
+            "--shadow-smoothing"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shadow smoothing."
+        },
+        {
+          "name": "border_width",
+          "flags": [
+            "--border-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Border width."
+        },
+        {
+          "name": "border_color",
+          "flags": [
+            "--border-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Border colour."
+        },
+        {
+          "name": "border_alpha",
+          "flags": [
+            "--border-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Border alpha."
+        },
+        {
+          "name": "bg_color",
+          "flags": [
+            "--bg-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Background colour."
+        },
+        {
+          "name": "bg_alpha",
+          "flags": [
+            "--bg-alpha"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background alpha."
+        },
+        {
+          "name": "bg_style",
+          "flags": [
+            "--bg-style"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background style identifier."
+        },
+        {
+          "name": "bg_round_radius",
+          "flags": [
+            "--bg-round-radius"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background corner radius."
+        },
+        {
+          "name": "bg_width",
+          "flags": [
+            "--bg-width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background width."
+        },
+        {
+          "name": "bg_height",
+          "flags": [
+            "--bg-height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background height."
+        },
+        {
+          "name": "bg_h_offset",
+          "flags": [
+            "--bg-h-offset"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background horizontal offset."
+        },
+        {
+          "name": "bg_v_offset",
+          "flags": [
+            "--bg-v-offset"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Background vertical offset."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "text-ranges",
+      "summary": "Apply byte-accurate multi-style ranges to a text segment.",
+      "usage": "capcut text-ranges <project> <id> --styles <json-or-@file>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "styles",
+          "flags": [
+            "--styles"
+          ],
+          "type": "json",
+          "required": false,
+          "description": "Inline JSON or @file style ranges."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "caption",
+      "summary": "Transcribe audio via whisper into real caption-track segments.",
+      "usage": "capcut caption <project> (--audio <path> | --from-segment <id>) [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "path",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "script",
+          "flags": [
+            "--script"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Known transcript (plain text). Whisper's word timing is kept, the script's wording is used; each non-empty line is a cue boundary. The result's `script` block reports matched/substituted/inserted words."
+        },
+        {
+          "name": "audio",
+          "flags": [
+            "--audio"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Audio input."
+        },
+        {
+          "name": "from_segment",
+          "flags": [
+            "--from-segment"
+          ],
+          "type": "id",
+          "required": false,
+          "description": "Audio segment input."
+        },
+        {
+          "name": "whisper_cmd",
+          "flags": [
+            "--whisper-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Whisper binary."
+        },
+        {
+          "name": "whisper_engine",
+          "flags": [
+            "--whisper-engine"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Whisper CLI dialect.",
+          "values": [
+            "openai",
+            "whisper-cpp",
+            "faster-whisper"
+          ]
+        },
+        {
+          "name": "whisper_model",
+          "flags": [
+            "--whisper-model"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Whisper model."
+        },
+        {
+          "name": "language",
+          "flags": [
+            "--language"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Language code."
+        },
+        {
+          "name": "karaoke",
+          "flags": [
+            "--karaoke"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Create word-highlight caption ranges."
+        },
+        {
+          "name": "max_words",
+          "flags": [
+            "--max-words"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Maximum words per cue."
+        },
+        {
+          "name": "max_gap_ms",
+          "flags": [
+            "--max-gap-ms"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Maximum gap inside a karaoke cue."
+        },
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "style_ref",
+          "flags": [
+            "--style-ref"
+          ],
+          "type": "id",
+          "required": false,
+          "description": "Copy styling from this text segment."
+        },
+        {
+          "name": "preset",
+          "flags": [
+            "--preset"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Apply a make-preset style preset; explicit flags override preset values."
+        },
+        {
+          "name": "color_cycle",
+          "flags": [
+            "--color-cycle"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Rotate the base text colour per cue: comma-separated #RRGGBB list, in order. Wins over --color per cue; independent of keyword emphasis."
+        },
+        {
+          "name": "highlight_words",
+          "flags": [
+            "--highlight-words"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Emphasize case-insensitive whole-word matches per cue: comma-separated words, or @file with one word/phrase per line."
+        },
+        {
+          "name": "keyword_color",
+          "flags": [
+            "--keyword-color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Emphasis colour for --highlight-words matches.",
+          "default": "#FFD700"
+        },
+        {
+          "name": "keyword_size",
+          "flags": [
+            "--keyword-size"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Emphasis size for --highlight-words matches, as a multiplier on the cue's base font size.",
+          "default": 1.2
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [
+        "whisper CLI"
+      ],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "translate",
+      "summary": "Clone a draft into another language via the Anthropic API.",
+      "usage": "capcut translate <project> --to <language> --out <path> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "to",
+          "flags": [
+            "--to"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target language."
+        },
+        {
+          "name": "from",
+          "flags": [
+            "--from"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Source language."
+        },
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        },
+        {
+          "name": "api_key",
+          "flags": [
+            "--api-key"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Anthropic API key."
+        },
+        {
+          "name": "model",
+          "flags": [
+            "--model"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Anthropic model."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [
+        "ANTHROPIC_API_KEY or --api-key"
+      ],
+      "output": {
+        "type": "file",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "migrate",
+      "summary": "Apply known schema migrations across version boundaries.",
+      "usage": "capcut migrate <project> (--from <version> --to <version> | --like <project> | --from-store)",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "from",
+          "flags": [
+            "--from"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Source version."
+        },
+        {
+          "name": "to",
+          "flags": [
+            "--to"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target version."
+        },
+        {
+          "name": "like",
+          "flags": [
+            "--like"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Donor project: copy its schema markers (version, new_version, platform, last_modified_platform, color_space, render flags) onto this draft so a build that refused it as 'from an unusual path' opens it (#67, #111). Timeline content is never touched."
+        },
+        {
+          "name": "from_store",
+          "flags": [
+            "--from-store"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Like --like, with the newest app-authored project in this draft's own drafts folder as the donor."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "add-sfx",
+      "summary": "Add a sound effect on a dedicated track.",
+      "usage": "capcut add-sfx <project> <slug> <start> <duration> [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "slug",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "start",
+          "type": "time",
+          "required": true
+        },
+        {
+          "name": "duration",
+          "type": "time",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "volume",
+          "flags": [
+            "--volume"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "SFX volume."
+        },
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "chroma",
+      "summary": "Green-screen / chroma key a video segment, or --off.",
+      "usage": "capcut chroma <project> <id> (--color <hex> | --off) [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "hex",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "color",
+          "flags": [
+            "--color"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Chroma colour."
+        },
+        {
+          "name": "intensity",
+          "flags": [
+            "--intensity"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Key intensity."
+        },
+        {
+          "name": "off",
+          "flags": [
+            "--off"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Remove chroma key."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "matting",
+      "summary": "Smart matting (background removal) on a video/photo segment's material — flag 3 on; --off writes the documented flag-0 object.",
+      "usage": "capcut matting <project> <id> [--off]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "id",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "off",
+          "flags": [
+            "--off"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Turn smart matting off: writes the documented flag-0 matting object on the segment's video material (cache fields kept)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "prune",
+      "summary": "Remove materials no segment references.",
+      "usage": "capcut prune <project>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "register",
+      "summary": "Repair an existing draft's registration metadata (draft_meta_info.json + root_meta_info.json entry) from a read-only draft_content.json so the CapCut app lists it (plan by default; --apply writes with .bak); --materials also registers the timeline's media in draft_materials (the CapCut 9.1 relink-prompt fix).",
+      "usage": "capcut register <project-dir> [--apply] [--materials] [--drafts <dir>]",
+      "positionals": [
+        {
+          "name": "project-dir",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "dir",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "apply",
+          "flags": [
+            "--apply"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Write the repaired draft_meta_info.json / root_meta_info.json entry (default: print the plan only)."
+        },
+        {
+          "name": "materials",
+          "flags": [
+            "--materials"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Also register the timeline's local media in draft_meta_info.json's draft_materials (the list CapCut 9.1 uses to decide what is imported; empty, every clip shows as 'file inaccessible'). Appends missing entries to the type-0 group, preserves existing ones, no-ops when complete. Reports timeline materials whose local_material_id does not link to their entry; `capcut lint <project> --fix` writes that link."
+        },
+        {
+          "name": "drafts",
+          "flags": [
+            "--drafts"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Draft store root when the draft does not live inside a known one."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "rename",
+      "summary": "Rename a draft after creation: the folder on disk plus draft_name and every self-referential path in draft_meta_info.json and the store's root_meta_info.json entry, transactionally (refuses when the target folder exists).",
+      "usage": "capcut rename <project> <new-name> [--drafts <dir>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "new-name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "dir",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "drafts",
+          "flags": [
+            "--drafts"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Draft store root when the draft does not live inside a known one."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "relink",
+      "summary": "Repair broken media paths (--dir or --from/--to).",
+      "usage": "capcut relink <project> (--dir <path> | --from <prefix> --to <prefix>) [--stage]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "path",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "dir",
+          "flags": [
+            "--dir"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Directory containing replacement files."
+        },
+        {
+          "name": "from",
+          "flags": [
+            "--from"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Old path prefix."
+        },
+        {
+          "name": "to",
+          "flags": [
+            "--to"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "New path prefix."
+        },
+        {
+          "name": "stage",
+          "flags": [
+            "--stage"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Copy each file this run relinks into the draft's assets/<kind>/ and point the material at the copy, so the repaired draft is portable (video/audio only; skipped under --dry-run — a copy is a side effect no draft write rolls back)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "replace-media",
+      "summary": "Swap a segment's source file (placeholder > final) keeping its timing, effects, and keyframes.",
+      "usage": "capcut replace-media <project> <segment-id> <new-file> [--retime]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "segment-id",
+          "type": "id",
+          "required": true
+        },
+        {
+          "name": "new-file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "retime",
+          "flags": [
+            "--retime"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Fit the segment to the new clip instead of preserving in/out."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary for duration/dimension detection."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "timeline",
+      "summary": "Show the track/segment layout (JSON, or -H ASCII bars).",
+      "usage": "capcut timeline <project> [--cols <number>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "number",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "cols",
+          "flags": [
+            "--cols"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Timeline columns.",
+          "default": 60
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "projects",
+      "summary": "List CapCut/JianYing draft folders on disk.",
+      "usage": "capcut projects [query] [--drafts <path>] [--names]",
+      "positionals": [
+        {
+          "name": "path",
+          "type": "path",
+          "required": false
+        },
+        {
+          "name": "query",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "drafts",
+          "flags": [
+            "--drafts"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Draft root directory."
+        },
+        {
+          "name": "names",
+          "flags": [
+            "--names"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Read project display names."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "diff",
+      "summary": "Compare two drafts (segments/materials/tracks added/removed/changed).",
+      "usage": "capcut diff <project-a> <project-b>",
+      "positionals": [
+        {
+          "name": "project-a",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "project-b",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "concat",
+      "summary": "Append one draft onto another's timeline (id-safe), write to --out or in place.",
+      "usage": "capcut concat <project-a> <project-b> [--out <path>]",
+      "positionals": [
+        {
+          "name": "project-a",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "project-b",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "path",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "config",
+      "summary": "Show the resolved config (.capcutrc + effective defaults).",
+      "usage": "capcut config",
+      "positionals": [],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "describe",
+      "summary": "Emit the full command surface as JSON (agent tool spec).",
+      "usage": "capcut describe",
+      "positionals": [],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "completions",
+      "summary": "Generate shell completions (bash|zsh|fish).",
+      "usage": "capcut completions <bash|zsh|fish>",
+      "positionals": [],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "text",
+        "description": "Plain text on stdout."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "enums",
+      "summary": "List enum slugs (transitions, masks, effects, ...) by category.",
+      "usage": "capcut enums <category-flag> [--jianying]",
+      "positionals": [
+        {
+          "name": "category-flag",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "array",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "catalogue",
+      "summary": "Find a resource id by name across every category, harvested entries included.",
+      "usage": "capcut catalogue <query> [--kind <category>] [--limit <n>] [--jianying]",
+      "positionals": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "n",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "kind",
+          "flags": [
+            "--kind"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Search only this category (default: all categories, filters and bubbles included).",
+          "values": [
+            "transitions",
+            "masks",
+            "image_intros",
+            "image_outros",
+            "image_combos",
+            "text_intros",
+            "text_outros",
+            "text_loop_anims",
+            "scene_effects",
+            "character_effects",
+            "audio_effects",
+            "fonts",
+            "filters",
+            "bubbles"
+          ]
+        },
+        {
+          "name": "limit",
+          "flags": [
+            "--limit"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Keep only the N best matches.",
+          "default": 20
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "array",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "harvest-enums",
+      "summary": "Learn store resource ids into the per-user catalogue: from one draft, the whole library (--sync), or by hand (--add).",
+      "usage": "capcut harvest-enums [<project> | --sync | --add <kind> <slug> <resource-id>] [--apply] [--catalogue <path>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": false
+        },
+        {
+          "name": "slug",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "resource-id",
+          "type": "id",
+          "required": false
+        },
+        {
+          "name": "path",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "apply",
+          "flags": [
+            "--apply"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Write the new entries into the user catalogue (default: plan only)."
+        },
+        {
+          "name": "catalogue",
+          "flags": [
+            "--catalogue"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "User catalogue file (default: ~/.config/capcut-cli/user-enums.json, or $CAPCUT_CLI_USER_ENUMS)."
+        },
+        {
+          "name": "sync",
+          "flags": [
+            "--sync"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Harvest every draft in the library (what `projects` lists) in one sweep."
+        },
+        {
+          "name": "drafts",
+          "flags": [
+            "--drafts"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Draft library root for --sync (default: the per-OS CapCut/JianYing dirs)."
+        },
+        {
+          "name": "add",
+          "flags": [
+            "--add"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Register one entry by hand: --add <kind> <slug> <resource-id>."
+        },
+        {
+          "name": "effect_id",
+          "flags": [
+            "--effect-id"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Effect id for an --add entry that carries both ids."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "doctor",
+      "summary": "Environment preflight (Node, whisper, API key, project dir).",
+      "usage": "capcut doctor",
+      "positionals": [],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "diagnose",
+      "summary": "Inspect canonical draft files, divergence, and editor-write safety.",
+      "usage": "capcut diagnose <project> [--bundle <report.json>]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "report.json",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "bundle",
+          "flags": [
+            "--bundle"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Write a redacted JSON diagnostic bundle."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "fixture",
+      "summary": "Build a shareable, redacted compatibility bundle (timeline JSON only) for a version-support issue, including the mask-keyframe evidence report (#44).",
+      "usage": "capcut fixture <project> --out <dir> [--check]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output directory for the sanitized bundle."
+        },
+        {
+          "name": "check",
+          "flags": [
+            "--check"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Scan the finished bundle (SANITIZE_REPORT.json and README included) for residual home paths, emails, device ids and the account name, reporting file:line per finding and exiting non-zero on any. With only a bundle directory as the argument, re-checks an existing bundle without rebuilding."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "sync-timelines",
+      "summary": "Reconcile drifted timeline mirrors (template-2.tmp, draft_info.json) from a read-only draft_content.json (plan with mtimes by default; --apply rewrites only the drifted mirrors).",
+      "usage": "capcut sync-timelines <project-dir> [--nested] [--apply]",
+      "positionals": [
+        {
+          "name": "project-dir",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "apply",
+          "flags": [
+            "--apply"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Rewrite only the drifted mirror files from draft_content.json (default: print the plan only)."
+        },
+        {
+          "name": "nested",
+          "flags": [
+            "--nested"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Also reconcile the nested Timelines/<id>/ documents (draft_info.json, draft_content.json, template-2.tmp), each keeping its own GUID — the workaround verified on CapCut Mac 9.2.8 in issue #50, as an explicit opt-in. Timelines/project.json is never touched."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "restore",
+      "summary": "Undo writes from .bak / snapshot history (--step N, --list).",
+      "usage": "capcut restore <project> [--step <number> | --list]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "number",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "step",
+          "flags": [
+            "--step"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Snapshot number."
+        },
+        {
+          "name": "list",
+          "flags": [
+            "--list"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "List snapshots."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "serve",
+      "summary": "Run a stateless JSONL job queue from stdin/--queue.",
+      "usage": "capcut serve [--queue <path>] [options]",
+      "positionals": [
+        {
+          "name": "path",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "queue",
+          "flags": [
+            "--queue"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "JSONL queue file."
+        },
+        {
+          "name": "fail_fast",
+          "flags": [
+            "--fail-fast"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Stop after first failure."
+        },
+        {
+          "name": "workers",
+          "flags": [
+            "--workers"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Maximum parallel workers."
+        },
+        {
+          "name": "retries",
+          "flags": [
+            "--retries"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Retries per job."
+        },
+        {
+          "name": "timeout",
+          "flags": [
+            "--timeout"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Job timeout in milliseconds."
+        },
+        {
+          "name": "backoff_ms",
+          "flags": [
+            "--backoff-ms"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Initial retry backoff in milliseconds."
+        },
+        {
+          "name": "max_buffer_mb",
+          "flags": [
+            "--max-buffer-mb"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Maximum captured output per job in MiB."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "jsonl",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "decrypt",
+      "summary": "Detect JianYing 6.0+ encryption and explain the workaround.",
+      "usage": "capcut decrypt <project-or-file>",
+      "positionals": [
+        {
+          "name": "project-or-file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure",
+        "2": "encrypted draft detected"
+      }
+    },
+    {
+      "name": "export",
+      "summary": "EXPERIMENTAL UI-automated render queue (macOS).",
+      "usage": "capcut export <drafts-dir> --batch [options]",
+      "positionals": [
+        {
+          "name": "drafts-dir",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "batch",
+          "flags": [
+            "--batch"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Export every draft."
+        },
+        {
+          "name": "app",
+          "flags": [
+            "--app"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Target editor.",
+          "values": [
+            "capcut",
+            "jianying"
+          ]
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "init",
+      "summary": "Create a new empty draft from a template.",
+      "usage": "capcut init <name> [--template auto|bundled|<dir>] [--drafts <dir>] [--ratio <r> | --width <px> --height <px>]",
+      "positionals": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "dir",
+          "type": "path",
+          "required": false
+        },
+        {
+          "name": "r",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "template",
+          "flags": [
+            "--template"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Skeleton for the new draft. `auto` (the default when omitted): when the drafts folder holds projects from a newer CapCut major than the bundled template declares, seed the draft from the store's newest app-authored project — its version markers and settings, none of its content — because CapCut 8.4+/8.7 Windows/9.3 refuse the bundled 6.5.0 template's drafts as 'from an unusual path' (#67, #111); otherwise the bundled template. `bundled`: always the bundled template. A directory: copy that template (its Timelines/ mirrors, .bak files and undo history are never carried over)."
+        },
+        {
+          "name": "drafts",
+          "flags": [
+            "--drafts"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Draft root directory."
+        },
+        {
+          "name": "ratio",
+          "flags": [
+            "--ratio"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Canvas aspect preset at the size CapCut uses for it (16:9 = 1920x1080, the template default; 9:16 = 1080x1920 portrait). Explicit --width/--height win over the preset's size but keep its label.",
+          "values": [
+            "16:9",
+            "9:16",
+            "1:1",
+            "4:3",
+            "3:4"
+          ]
+        },
+        {
+          "name": "width",
+          "flags": [
+            "--width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Exact canvas width in pixels (requires --height)."
+        },
+        {
+          "name": "height",
+          "flags": [
+            "--height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Exact canvas height in pixels (requires --width)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "quickstart",
+      "summary": "One-command first draft: create + add one input + lint + print the open-in-CapCut step.",
+      "usage": "capcut quickstart <name> [--video <f>] [--audio <f>] [--srt <f>] [--drafts <dir>] [--template auto|bundled|<dir>] [--ratio <r> | --width <px> --height <px>]",
+      "positionals": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "f",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "dir",
+          "type": "path",
+          "required": false
+        },
+        {
+          "name": "r",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "video",
+          "flags": [
+            "--video"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Video or image to add."
+        },
+        {
+          "name": "audio",
+          "flags": [
+            "--audio"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Audio file to add."
+        },
+        {
+          "name": "srt",
+          "flags": [
+            "--srt"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "SRT subtitles to add as caption segments."
+        },
+        {
+          "name": "drafts",
+          "flags": [
+            "--drafts"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Draft root directory."
+        },
+        {
+          "name": "template",
+          "flags": [
+            "--template"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Skeleton for the new draft. `auto` (the default when omitted): when the drafts folder holds projects from a newer CapCut major than the bundled template declares, seed the draft from the store's newest app-authored project — its version markers and settings, none of its content — because CapCut 8.4+/8.7 Windows/9.3 refuse the bundled 6.5.0 template's drafts as 'from an unusual path' (#67, #111); otherwise the bundled template. `bundled`: always the bundled template. A directory: copy that template (its Timelines/ mirrors, .bak files and undo history are never carried over)."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary for duration detection."
+        },
+        {
+          "name": "ratio",
+          "flags": [
+            "--ratio"
+          ],
+          "type": "enum",
+          "required": false,
+          "description": "Canvas aspect preset at the size CapCut uses for it (16:9 = 1920x1080, the template default; 9:16 = 1080x1920 portrait). Explicit --width/--height win over the preset's size but keep its label.",
+          "values": [
+            "16:9",
+            "9:16",
+            "1:1",
+            "4:3",
+            "3:4"
+          ]
+        },
+        {
+          "name": "width",
+          "flags": [
+            "--width"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Exact canvas width in pixels (requires --height)."
+        },
+        {
+          "name": "height",
+          "flags": [
+            "--height"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Exact canvas height in pixels (requires --width)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "compile",
+      "summary": "Build a draft from a declarative JSON spec (the inverse of describe).",
+      "usage": "capcut compile <spec.json> [--out <draftdir>] [--template auto|bundled|<dir>] [--data <rows.jsonl|->] [--check | --plan]",
+      "positionals": [
+        {
+          "name": "spec.json",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "draftdir",
+          "type": "path",
+          "required": false
+        },
+        {
+          "name": "dir",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        },
+        {
+          "name": "drafts",
+          "flags": [
+            "--drafts"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Draft root directory."
+        },
+        {
+          "name": "template",
+          "flags": [
+            "--template"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Skeleton for the new draft. `auto` (the default when omitted): when the drafts folder holds projects from a newer CapCut major than the bundled template declares, seed the draft from the store's newest app-authored project — its version markers and settings, none of its content — because CapCut 8.4+/8.7 Windows/9.3 refuse the bundled 6.5.0 template's drafts as 'from an unusual path' (#67, #111); otherwise the bundled template. `bundled`: always the bundled template. A directory: copy that template (its Timelines/ mirrors, .bak files and undo history are never carried over)."
+        },
+        {
+          "name": "check",
+          "flags": [
+            "--check"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Validate without writing."
+        },
+        {
+          "name": "plan",
+          "flags": [
+            "--plan"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Print the normalized build plan without writing."
+        },
+        {
+          "name": "data",
+          "flags": [
+            "--data"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "JSONL rows file ('-' for stdin): build one draft per row, substituting {{key}} placeholders from the row into the spec's string values (and so the draft name). Same per-line error contract as batch: the first bad row aborts with its row number before any draft is written."
+        },
+        {
+          "name": "continue_on_error",
+          "flags": [
+            "--continue-on-error"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "With --data: build only the rows that validate and exit 1 if any fail (batch's contract)."
+        }
+      ],
+      "mutates": true,
+      "prerequisites": [
+        "ffprobe (optional)"
+      ],
+      "output": {
+        "type": "file",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "render",
+      "summary": "Render a low-res ffmpeg proxy preview (trim+speed+audio, --burn-captions); not CapCut's final render.",
+      "usage": "capcut render <project> [--out <preview.mp4>] [options]",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "preview.mp4",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "out",
+          "flags": [
+            "--out"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Output path."
+        },
+        {
+          "name": "scale",
+          "flags": [
+            "--scale"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Proxy scale.",
+          "default": 0.5
+        },
+        {
+          "name": "fps",
+          "flags": [
+            "--fps"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Output FPS."
+        },
+        {
+          "name": "ffmpeg_cmd",
+          "flags": [
+            "--ffmpeg-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "FFmpeg binary."
+        },
+        {
+          "name": "encoder",
+          "flags": [
+            "--encoder"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Video encoder for the proxy (-c:v; default libx264). Hardware encoders like h264_videotoolbox/h264_nvenc/h264_qsv work when the build carries them; validated against `ffmpeg -encoders` before rendering."
+        },
+        {
+          "name": "burn_captions",
+          "flags": [
+            "--burn-captions"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Burn captions."
+        },
+        {
+          "name": "soft_captions",
+          "flags": [
+            "--soft-captions"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Mux the text-track cues as a toggleable mov_text subtitle stream (the SRT is also written next to the output as <preview>.srt); skipped with a note when ffmpeg has no mov_text encoder."
+        },
+        {
+          "name": "all_video_tracks",
+          "flags": [
+            "--all-video-tracks"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Composite every video track."
+        },
+        {
+          "name": "progress",
+          "flags": [
+            "--progress"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Stream ffmpeg's progress to stderr instead of buffering it."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [
+        "ffmpeg"
+      ],
+      "output": {
+        "type": "file",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "detect-scenes",
+      "summary": "Detect scene-change cut points in a video (ffmpeg scene filter); prints cuts + segments to seed compile/cut.",
+      "usage": "capcut detect-scenes <video> [options]",
+      "positionals": [
+        {
+          "name": "video",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "threshold",
+          "flags": [
+            "--threshold"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Scene-change score a cut must exceed (0..1).",
+          "default": 0.4
+        },
+        {
+          "name": "min_gap",
+          "flags": [
+            "--min-gap"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Merge cuts closer than this many seconds, keeping the strongest.",
+          "default": 2
+        },
+        {
+          "name": "limit",
+          "flags": [
+            "--limit"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Keep only the N strongest cuts."
+        },
+        {
+          "name": "ffmpeg_cmd",
+          "flags": [
+            "--ffmpeg-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "FFmpeg binary."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary for the video-stream duration (falls back to the container duration without it)."
+        },
+        {
+          "name": "json",
+          "flags": [
+            "--json"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Force JSON output (the default; overrides -H)."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [
+        "ffmpeg",
+        "ffprobe (optional)"
+      ],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "detect-silence",
+      "summary": "Detect silence spans in a media file (ffmpeg silencedetect); prints silences + keep segments to seed compile/cut.",
+      "usage": "capcut detect-silence <media> [options]",
+      "positionals": [
+        {
+          "name": "media",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "options": [
+        {
+          "name": "threshold_db",
+          "flags": [
+            "--threshold-db"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Noise floor in dBFS; audio at or below this level counts as silence.",
+          "default": -30
+        },
+        {
+          "name": "min_silence",
+          "flags": [
+            "--min-silence"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Shortest silence to report, in seconds.",
+          "default": 0.5
+        },
+        {
+          "name": "pad",
+          "flags": [
+            "--pad"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Margin in seconds kept around speech: each silence span is shrunk by this on both ends so cuts never clip a word mid-syllable.",
+          "default": 0.1
+        },
+        {
+          "name": "limit",
+          "flags": [
+            "--limit"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Keep only the N longest silences."
+        },
+        {
+          "name": "ffmpeg_cmd",
+          "flags": [
+            "--ffmpeg-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "FFmpeg binary."
+        },
+        {
+          "name": "ffprobe_cmd",
+          "flags": [
+            "--ffprobe-cmd"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "ffprobe binary for the container duration (falls back to ffmpeg's stderr header without it)."
+        },
+        {
+          "name": "json",
+          "flags": [
+            "--json"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Force JSON output (the default; overrides -H)."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [
+        "ffmpeg",
+        "ffprobe (optional)"
+      ],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    },
+    {
+      "name": "detect-retakes",
+      "summary": "Find repeated takes in the draft's captions (or an SRT): windowed word-sequence similarity, later take kept; prints cuts + keep segments to seed compile/cut.",
+      "usage": "capcut detect-retakes <project> [--track-name <s>] [--window <s>] [--similarity <n>] [--min-words <n>] | --srt <file>",
+      "positionals": [
+        {
+          "name": "project",
+          "type": "path",
+          "required": true
+        },
+        {
+          "name": "s",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "n",
+          "type": "string",
+          "required": false
+        }
+      ],
+      "options": [
+        {
+          "name": "track_name",
+          "flags": [
+            "--track-name"
+          ],
+          "type": "string",
+          "required": false,
+          "description": "Target track name."
+        },
+        {
+          "name": "srt",
+          "flags": [
+            "--srt"
+          ],
+          "type": "path",
+          "required": false,
+          "description": "Read cues from this SRT file instead of a draft (no <project> then)."
+        },
+        {
+          "name": "window",
+          "flags": [
+            "--window"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Max seconds between the earlier cue's end and the later cue's start.",
+          "default": 60
+        },
+        {
+          "name": "similarity",
+          "flags": [
+            "--similarity"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Word-sequence similarity floor, 0..1 (2·LCS/(a+b)).",
+          "default": 0.8
+        },
+        {
+          "name": "min_words",
+          "flags": [
+            "--min-words"
+          ],
+          "type": "number",
+          "required": false,
+          "description": "Cues with fewer normalised words never count as a take.",
+          "default": 4
+        },
+        {
+          "name": "json",
+          "flags": [
+            "--json"
+          ],
+          "type": "boolean",
+          "required": false,
+          "description": "Force JSON output (the default; overrides -H)."
+        }
+      ],
+      "mutates": false,
+      "prerequisites": [],
+      "output": {
+        "type": "object",
+        "description": "JSON by default; use -H where supported for human output."
+      },
+      "exit_codes": {
+        "0": "success",
+        "1": "invalid input, warning, or operation failure"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "draft_content": {
+    "id": "draft-87",
+    "name": "template-canonical",
+    "duration": 1000000,
+    "fps": 30,
+    "canvas_config": { "width": 1080, "height": 1920, "ratio": "9:16" },
+    "platform": { "app_source": "cc", "app_version": "8.7.0", "os": "windows" },
+    "tracks": [],
+    "materials": {
+      "videos": [],
+      "audios": [],
+      "texts": [],
+      "speeds": [],
+      "material_animations": [],
+      "audio_fades": [],
+      "transitions": []
+    }
+  }
+}

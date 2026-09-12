@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Pre-commit gate:
+#   1. lint-staged — biome check/format on staged files only
+#   2. unit tests — node:test against a freshly built CLI
+#
+# Skip with `git commit --no-verify` only when truly necessary; the gate is
+# cheap (lint=<1s, tests<10s on a clean tree) so the bypass should be rare.
+
+set -e
+
+# 1. Lint + format staged files
+npx --no-install lint-staged
+
+# 2. Unit tests. `npm test` rebuilds dist/ first so it matches src/ — without
+#    the rebuild, test:fast runs against a stale build and can pass-or-fail on
+#    code that isn't what's being committed.
+#    Captured to a file, not piped into tail: a pipeline's exit status is the
+#    LAST command's, so `npm test | tail` reported tail's success and let a red
+#    suite commit silently (sh has no pipefail; set -e never saw the failure).
+test_log="$(mktemp)"
+if npm test --silent >"$test_log" 2>&1; then
+  tail -20 "$test_log"
+  rm -f "$test_log"
+else
+  tail -40 "$test_log"
+  rm -f "$test_log"
+  echo "pre-commit: npm test failed — commit aborted" >&2
+  exit 1
+fi
