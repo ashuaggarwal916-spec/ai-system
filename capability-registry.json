@@ -98,19 +98,88 @@
       "capabilities": ["linkedin-posts", "linkedin-comments", "linkedin-replies", "voice-engine", "content-drafting", "ai-tell-removal", "approve-before-publish", "apify-integration", "publora-integration", "11-marketing-skills"],
       "brain_integration": { "module": "social", "auto_detect": true, "triggers": ["linkedin", "linkedin post", "linkedin comment", "linkedin reply", "professional", "b2b", "thought leadership", "personal brand"] },
       "installed_at": "2026-09-12"
+    },
+    {
+      "id": "craft-agents",
+      "name": "Craft Agents",
+      "category": "ai",
+      "source": "github.com/craft-ai-agents/craft-agents-oss",
+      "path": "capabilities/ai/craft-agents",
+      "status": "active",
+      "capabilities": ["codebase-mapping", "agent-multitasking", "mcp-integration", "api-integration", "session-sharing", "document-centric", "claude-agent-sdk", "pi-sdk", "linear-integration", "gmail-integration", "slack-integration", "postgres-integration"],
+      "brain_integration": { "module": "codebase", "auto_detect": true, "triggers": ["codebase", "map", "index", "explore", "understand code", "architecture", "dependencies", "mcp", "api", "linear", "gmail", "slack"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "codebase-memory",
+      "name": "Codebase Memory MCP",
+      "category": "mcp",
+      "source": "github.com/DeusData/codebase-memory-mcp",
+      "path": "capabilities/mcp/codebase-memory",
+      "status": "active",
+      "capabilities": ["knowledge-graph", "162-languages", "tree-sitter", "hybrid-lsp", "15-mcp-tools", "graph-visualization", "impact-analysis", "dead-code-detection", "cross-service-linking", "adr-management", "cypher-queries"],
+      "brain_integration": { "module": "codebase", "auto_detect": true, "triggers": ["codebase", "graph", "query", "impact", "dead code", "architecture", "dependencies", "symbols", "functions", "classes"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "openmontage",
+      "name": "OpenMontage",
+      "category": "video",
+      "source": "github.com/calesthio/OpenMontage",
+      "path": "capabilities/video/openmontage",
+      "status": "active",
+      "capabilities": ["video-production", "agentic-video", "remotion", "ffmpeg", "video-editing", "motion-graphics", "audio-mixing", "subtitle-generation", "thumbnail-creation", "multi-format-export"],
+      "brain_integration": { "module": "video", "auto_detect": true, "triggers": ["video", "edit", "produce", "render", "motion", "animation", "audio", "subtitle", "thumbnail"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "background-agents",
+      "name": "Background Agents",
+      "category": "ai",
+      "source": "github.com/ColeMurray/background-agents",
+      "path": "capabilities/ai/background-agents",
+      "status": "active",
+      "capabilities": ["background-coding", "sandboxed-environments", "multiplayer-sessions", "slack-integration", "github-integration", "linear-integration", "scheduled-automations", "parallel-subtasks", "pr-creation"],
+      "brain_integration": { "module": "agents", "auto_detect": true, "triggers": ["background", "sandbox", "parallel", "schedule", "automate", "slack", "github", "linear", "pr"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "diagram-design",
+      "name": "Diagram Design",
+      "category": "design",
+      "source": "github.com/cathrynlavery/diagram-design",
+      "path": "capabilities/design/diagram-design",
+      "status": "active",
+      "capabilities": ["39-diagram-types", "architecture-diagrams", "flowcharts", "sankey", "fishbone", "wardley-map", "kanban", "user-journey", "deployment", "dependency-graph", "uml-class", "story-map", "database-schema", "self-improving-loop"],
+      "brain_integration": { "module": "design", "auto_detect": true, "triggers": ["diagram", "architecture", "flowchart", "sankey", "fishbone", "wardley", "kanban", "journey", "deployment", "uml", "schema"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "scientific-skills",
+      "name": "Scientific Agent Skills",
+      "category": "research",
+      "source": "github.com/K-Dense-AI/scientific-agent-skills",
+      "path": "capabilities/research/scientific-skills",
+      "status": "active",
+      "capabilities": ["165-scientific-skills", "cancer-genomics", "1000-genomes", "pathogen-surveillance", "pk-pd-modelling", "drug-target-binding", "molecular-dynamics", "rna-velocity", "microbiome", "geospatial", "time-series", "hugging-science", "78-databases"],
+      "brain_integration": { "module": "research", "auto_detect": true, "triggers": ["science", "research", "genomics", "cancer", "drug", "molecular", "rna", "microbiome", "geospatial", "time series", "database"] },
+      "installed_at": "2026-09-12"
     }
   ],
   "stats": {
-    "total_capabilities": 8,
+    "total_capabilities": 15,
     "by_category": {
-      "ai": 1,
+      "ai": 3,
       "voice": 1,
       "api": 1,
       "directory": 1,
-      "research": 1,
+      "research": 2,
       "social": 2,
       "content": 1,
-      "skills": 1
+      "skills": 1,
+      "mcp": 1,
+      "video": 1,
+      "design": 1
     }
   },
   "notes": "Instagram reel DdE2GlYw9lB could not be extracted (Instagram blocks automated access)"
