@@ -61,6 +61,11 @@ export function apiRouter({ auth, brain, agents, tasks, memory, registry }) {
     res.json(task || { error: 'Task not found' });
   });
 
+  // Skills routes
+  router.get('/skills', auth.authMiddleware, (req, res) => {
+    res.json(brain.listSkills());
+  });
+
   // Agents routes
   router.get('/agents', auth.authMiddleware, async (req, res) => {
     const list = await agents.list();
