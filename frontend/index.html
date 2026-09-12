@@ -3,106 +3,861 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI System</title>
+  <title>AI System — Agent Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f23; color: #e0e0e0; }
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a25;
+      --bg-hover: #222230;
+      --border: #2a2a3a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --accent: #8b5cf6;
+      --accent-hover: #7c3aed;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --user-bubble: #1e1e2e;
+      --assistant-bubble: transparent;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    /* Layout */
     .app { display: flex; height: 100vh; }
-    .sidebar { width: 240px; background: #1a1a2e; padding: 20px; border-right: 1px solid #2a2a3e; }
-    .sidebar h2 { color: #64ffda; margin-bottom: 20px; font-size: 18px; }
-    .sidebar ul { list-style: none; }
-    .sidebar li { padding: 10px 15px; cursor: pointer; border-radius: 8px; margin-bottom: 5px; transition: background 0.2s; }
-    .sidebar li:hover, .sidebar li.active { background: #2a2a3e; color: #64ffda; }
-    .main { flex: 1; display: flex; flex-direction: column; }
-    .header { padding: 20px; border-bottom: 1px solid #2a2a3e; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 20px; }
-    .content { flex: 1; padding: 20px; overflow-y: auto; }
-    .input-bar { padding: 20px; border-top: 1px solid #2a2a3e; display: flex; gap: 10px; }
-    .input-bar input { flex: 1; padding: 15px; border-radius: 10px; border: 1px solid #2a2a3e; background: #1a1a2e; color: #e0e0e0; font-size: 14px; }
-    .input-bar button { padding: 15px 25px; border-radius: 10px; border: none; background: #64ffda; color: #0f0f23; font-weight: bold; cursor: pointer; }
-    .message { padding: 15px; margin-bottom: 10px; border-radius: 10px; background: #1a1a2e; }
-    .message.user { border-left: 3px solid #64ffda; }
-    .message.assistant { border-left: 3px solid #bb86fc; }
-    .empty { text-align: center; padding: 60px; color: #666; }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .new-chat-btn {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .new-chat-btn:hover { background: var(--accent-hover); }
+    
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 8px;
+    }
+    .nav-section {
+      margin-bottom: 16px;
+    }
+    .nav-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 8px;
+      margin-bottom: 4px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+      transition: all 0.15s;
+      margin-bottom: 2px;
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: var(--bg-tertiary); color: var(--text-primary); }
+    .nav-item-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+    
+    .sidebar-footer {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+    }
+    .user-details { flex: 1; }
+    .user-name { font-size: 13px; font-weight: 500; }
+    .user-email { font-size: 11px; color: var(--text-muted); }
+    
+    /* Main Content */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    
+    /* Header */
+    .header {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-title { font-size: 16px; font-weight: 600; }
+    .header-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--accent);
+    }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .header-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .header-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    
+    /* Chat Area */
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      scroll-behavior: smooth;
+    }
+    .chat-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 40px;
+    }
+    .chat-empty h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--accent), #ec4899);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .chat-empty p {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 500px;
+      line-height: 1.6;
+    }
+    
+    /* Messages */
+    .message {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 16px 0;
+      display: flex;
+      gap: 16px;
+    }
+    .message-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .message.user .message-avatar { background: #3b82f6; }
+    .message.assistant .message-avatar { background: var(--accent); }
+    
+    .message-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .message-role {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .message-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .message-text {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .message-text code {
+      background: rgba(255,255,255,0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .message-text pre {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+    .message-text pre code {
+      background: transparent;
+      padding: 0;
+    }
+    
+    /* Input Area */
+    .input-area {
+      flex-shrink: 0;
+      padding: 16px 20px 20px;
+      background: linear-gradient(transparent, var(--bg-primary) 30%);
+    }
+    .input-wrapper {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .input-container {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      transition: border-color 0.2s;
+    }
+    .input-container:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .input-field {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      max-height: 200px;
+      min-height: 24px;
+      line-height: 1.5;
+      padding: 4px 0;
+    }
+    .input-field::placeholder { color: var(--text-muted); }
+    .input-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .input-btn.send {
+      background: var(--accent);
+      color: white;
+    }
+    .input-btn.send:hover { background: var(--accent-hover); }
+    .input-btn.send:disabled {
+      background: var(--bg-hover);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+    
+    .input-footer {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    
+    /* Status Bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+    .status-dot.warning { background: var(--warning); }
+    .status-dot.error { background: var(--error); }
+    
+    /* Auth Modal */
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    .auth-modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .auth-modal h2 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .auth-modal p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .auth-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      margin-bottom: 12px;
+      outline: none;
+    }
+    .auth-input:focus { border-color: var(--accent); }
+    .auth-btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .auth-btn:hover { background: var(--accent-hover); }
+    .auth-switch {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .auth-switch a {
+      color: var(--accent);
+      cursor: pointer;
+    }
+    
+    /* Loading Animation */
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 4px 0;
+    }
+    .typing-indicator span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: typing 1.4s infinite;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    
+    @keyframes typing {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .chat-container { padding: 12px; }
+      .input-area { padding: 12px; }
+    }
   </style>
 </head>
 <body>
-  <div class="app">
-    <div class="sidebar">
-      <h2>🧠 AI System</h2>
-      <ul>
-        <li class="active" onclick="showView('chat')">💬 New Chat</li>
-        <li onclick="showView('tasks')">📋 Tasks</li>
-        <li onclick="showView('projects')">📁 Projects</li>
-        <li onclick="showView('agents')">🤖 Agents</li>
-        <li onclick="showView('memory')">🧠 Memory</li>
-        <li onclick="showView('files')">📄 Files</li>
-        <li onclick="showView('settings')">⚙️ Settings</li>
-      </ul>
+  <!-- Auth Overlay -->
+  <div class="auth-overlay" id="authOverlay" style="display: none;">
+    <div class="auth-modal">
+      <h2 id="authTitle">Welcome back</h2>
+      <p id="authSubtitle">Sign in to continue to AI System</p>
+      <input type="email" class="auth-input" id="authEmail" placeholder="Email">
+      <input type="password" class="auth-input" id="authPassword" placeholder="Password">
+      <button class="auth-btn" onclick="handleAuth()" id="authBtn">Sign in</button>
+      <p class="auth-switch" id="authSwitch">
+        Don't have an account? <a onclick="toggleAuthMode()">Sign up</a>
+      </p>
     </div>
-    <div class="main">
-      <div class="header">
-        <h1>AI Agent Hub</h1>
-        <div>
-          <span id="userEmail" style="color: #888; margin-right: 15px;"></span>
-          <button onclick="logout()" style="padding: 8px 15px; border-radius: 5px; border: 1px solid #2a2a3e; background: transparent; color: #e0e0e0; cursor: pointer;">Logout</button>
+  </div>
+
+  <!-- Main App -->
+  <div class="app" id="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <button class="new-chat-btn" onclick="newChat()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          New Chat
+        </button>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Navigation</div>
+          <div class="nav-item active" onclick="showView('chat')">
+            <span class="nav-item-icon">💬</span> Chat
+          </div>
+          <div class="nav-item" onclick="showView('tasks')">
+            <span class="nav-item-icon">📋</span> Tasks
+          </div>
+          <div class="nav-item" onclick="showView('projects')">
+            <span class="nav-item-icon">📁</span> Projects
+          </div>
+          <div class="nav-item" onclick="showView('agents')">
+            <span class="nav-item-icon">🤖</span> Agents
+          </div>
+          <div class="nav-item" onclick="showView('files')">
+            <span class="nav-item-icon">📄</span> Files
+          </div>
+        </div>
+        
+        <div class="nav-section">
+          <div class="nav-section-title">System</div>
+          <div class="nav-item" onclick="showView('memory')">
+            <span class="nav-item-icon">🧠</span> Memory
+          </div>
+          <div class="nav-item" onclick="showView('resources')">
+            <span class="nav-item-icon">⚡</span> Resources
+          </div>
+          <div class="nav-item" onclick="showView('models')">
+            <span class="nav-item-icon">🌐</span> Models
+          </div>
+        </div>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="user-info" onclick="showView('settings')">
+          <div class="user-avatar" id="userAvatar">U</div>
+          <div class="user-details">
+            <div class="user-name" id="userName">User</div>
+            <div class="user-email" id="userEmail">user@example.com</div>
+          </div>
         </div>
       </div>
-      <div class="content" id="content">
-        <div class="empty">
-          <h2>Welcome to AI System</h2>
-          <p>Your multi-user AI agent operating system</p>
+    </aside>
+    
+    <!-- Main -->
+    <main class="main">
+      <header class="header">
+        <div class="header-left">
+          <span class="header-title">AI Agent Hub</span>
+          <span class="header-badge" id="modelBadge">auto</span>
+        </div>
+        <div class="header-right">
+          <button class="header-btn" title="Toggle theme">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+          <button class="header-btn" title="Settings" onclick="showView('settings')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+      
+      <div class="chat-container" id="chatContainer">
+        <div class="chat-empty" id="chatEmpty">
+          <h1>AI System</h1>
+          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy — I'll assemble a team of agents to get it done.</p>
         </div>
       </div>
-      <div class="input-bar">
-        <input type="text" id="messageInput" placeholder="Type your command..." onkeypress="if(event.key==='Enter')sendMessage()">
-        <button onclick="sendMessage()">Send</button>
+      
+      <div class="input-area">
+        <div class="input-wrapper">
+          <div class="input-container">
+            <textarea 
+              class="input-field" 
+              id="messageInput" 
+              placeholder="Send a message..." 
+              rows="1"
+              onkeydown="handleKeyDown(event)"
+              oninput="autoResize(this)"
+            ></textarea>
+            <button class="input-btn send" id="sendBtn" onclick="sendMessage()" disabled>
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+          <div class="input-footer">
+            AI System can make mistakes. Important information should be verified.
+          </div>
+        </div>
       </div>
-    </div>
+      
+      <div class="status-bar">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Ready</span>
+        <span>•</span>
+        <span id="providerInfo">Provider: OpenRouter</span>
+        <span>•</span>
+        <span id="tokenUsage">Tokens: 0</span>
+      </div>
+    </main>
   </div>
 
   <script>
     const API = 'http://localhost:3000/api';
     let token = localStorage.getItem('token');
     let user = JSON.parse(localStorage.getItem('user') || 'null');
-
-    if (token && user) {
-      document.getElementById('userEmail').textContent = user.email;
+    let currentView = 'chat';
+    let isLoading = false;
+    
+    // Auth
+    function toggleAuthMode() {
+      const title = document.getElementById('authTitle');
+      const subtitle = document.getElementById('authSubtitle');
+      const btn = document.getElementById('authBtn');
+      const switchEl = document.getElementById('authSwitch');
+      
+      if (btn.textContent === 'Sign in') {
+        title.textContent = 'Create account';
+        subtitle.textContent = 'Sign up for AI System';
+        btn.textContent = 'Sign up';
+        switchEl.innerHTML = 'Already have an account? <a onclick="toggleAuthMode()">Sign in</a>';
+      } else {
+        title.textContent = 'Welcome back';
+        subtitle.textContent = 'Sign in to continue to AI System';
+        btn.textContent = 'Sign in';
+        switchEl.innerHTML = 'Don\'t have an account? <a onclick="toggleAuthMode()">Sign up</a>';
+      }
     }
-
-    async function sendMessage() {
-      const input = document.getElementById('messageInput');
-      const message = input.value.trim();
-      if (!message) return;
-      input.value = '';
-
-      const content = document.getElementById('content');
-      content.innerHTML += `<div class="message user"><strong>You:</strong> ${message}</div>`;
-
+    
+    async function handleAuth() {
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+      const isLogin = document.getElementById('authBtn').textContent === 'Sign in';
+      
       try {
-        const res = await fetch(`${API}/command`, {
+        const res = await fetch(`${API}/auth/${isLogin ? 'login' : 'register'}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ command: message })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
         });
         const data = await res.json();
-        content.innerHTML += `<div class="message assistant"><strong>Brain:</strong> ${JSON.stringify(data, null, 2)}</div>`;
+        
+        if (data.success) {
+          token = data.token;
+          user = data.user;
+          localStorage.setItem('token', token);
+          localStorage.setItem('user', JSON.stringify(user));
+          document.getElementById('authOverlay').style.display = 'none';
+          updateUserUI();
+        } else {
+          alert(data.error || 'Authentication failed');
+        }
       } catch (err) {
-        content.innerHTML += `<div class="message assistant"><strong>Error:</strong> ${err.message}</div>`;
+        alert('Network error: ' + err.message);
       }
-      content.scrollTop = content.scrollHeight;
     }
-
-    function showView(view) {
-      document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('active'));
-      event.target.classList.add('active');
-      document.getElementById('content').innerHTML = `<div class="empty"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p>Coming soon</p></div>`;
+    
+    function updateUserUI() {
+      if (user) {
+        document.getElementById('userName').textContent = user.email.split('@')[0];
+        document.getElementById('userEmail').textContent = user.email;
+        document.getElementById('userAvatar').textContent = user.email[0].toUpperCase();
+      }
     }
-
+    
     function logout() {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.reload();
+      token = null;
+      user = null;
+      document.getElementById('authOverlay').style.display = 'flex';
+    }
+    
+    // Chat
+    function newChat() {
+      document.getElementById('chatContainer').innerHTML = `
+        <div class="chat-empty" id="chatEmpty">
+          <h1>AI System</h1>
+          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy — I'll assemble a team of agents to get it done.</p>
+        </div>
+      `;
+    }
+    
+    async function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const message = input.value.trim();
+      if (!message || isLoading) return;
+      
+      isLoading = true;
+      document.getElementById('sendBtn').disabled = true;
+      document.getElementById('statusText').textContent = 'Thinking...';
+      document.getElementById('statusDot').className = 'status-dot warning';
+      
+      // Remove empty state
+      const empty = document.getElementById('chatEmpty');
+      if (empty) empty.remove();
+      
+      // Add user message
+      const container = document.getElementById('chatContainer');
+      container.innerHTML += `
+        <div class="message user">
+          <div class="message-avatar">${user.email[0].toUpperCase()}</div>
+          <div class="message-content">
+            <div class="message-role">You <span class="message-time">${new Date().toLocaleTimeString()}</span></div>
+            <div class="message-text">${escapeHtml(message)}</div>
+          </div>
+        </div>
+      `;
+      
+      // Add typing indicator
+      const typingId = 'typing-' + Date.now();
+      container.innerHTML += `
+        <div class="message assistant" id="${typingId}">
+          <div class="message-avatar">AI</div>
+          <div class="message-content">
+            <div class="message-role">Assistant <span class="message-time">${new Date().toLocaleTimeString()}</span></div>
+            <div class="typing-indicator"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+      `;
+      container.scrollTop = container.scrollHeight;
+      input.value = '';
+      input.style.height = 'auto';
+      
+      try {
+        const res = await fetch(`${API}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ message })
+        });
+        const data = await res.json();
+        
+        // Remove typing indicator
+        document.getElementById(typingId).remove();
+        
+        // Add assistant response
+        container.innerHTML += `
+          <div class="message assistant">
+            <div class="message-avatar">AI</div>
+            <div class="message-content">
+              <div class="message-role">Assistant <span class="message-time">${new Date().toLocaleTimeString()}</span></div>
+              <div class="message-text">${formatResponse(data)}</div>
+            </div>
+          </div>
+        `;
+        
+        // Update token usage if available
+        if (data.usage) {
+          document.getElementById('tokenUsage').textContent = `Tokens: ${data.usage.total_tokens || 0}`;
+        }
+      } catch (err) {
+        document.getElementById(typingId).remove();
+        container.innerHTML += `
+          <div class="message assistant">
+            <div class="message-avatar">AI</div>
+            <div class="message-content">
+              <div class="message-text" style="color: var(--error)}">Error: ${err.message}</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      isLoading = false;
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('statusText').textContent = 'Ready';
+      document.getElementById('statusDot').className = 'status-dot';
+      container.scrollTop = container.scrollHeight;
+    }
+    
+    function formatResponse(data) {
+      if (data.error) return `<span style="color:var(--error)">${escapeHtml(data.error)}</span>`;
+      if (data.content) return escapeHtml(data.content);
+      return escapeHtml(JSON.stringify(data, null, 2));
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function autoResize(textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+      document.getElementById('sendBtn').disabled = !textarea.value.trim();
+    }
+    
+    function handleKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+    
+    // Views
+    function showView(view) {
+      currentView = view;
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.nav-item')?.classList.add('active');
+      
+      const container = document.getElementById('chatContainer');
+      
+      if (view === 'chat') {
+        newChat();
+        return;
+      }
+      
+      container.innerHTML = `<div class="chat-empty"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p>Loading...</p></div>`;
+      
+      // Fetch data based on view
+      const endpoints = {
+        tasks: '/tasks',
+        agents: '/agents',
+        resources: '/resources',
+        models: '/models'
+      };
+      
+      if (endpoints[view]) {
+        fetch(`${API}${endpoints[view]}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            container.innerHTML = `<div style="max-width:760px;margin:0 auto;padding:20px 0;">
+              <h2 style="margin-bottom:20px;">${view.charAt(0).toUpperCase() + view.slice(1)}</h2>
+              ${data.length === 0 ? '<p style="color:var(--text-muted)">No items found</p>' : ''}
+              ${data.map(item => `
+                <div style="padding:12px;background:var(--bg-tertiary);border-radius:8px;margin-bottom:8px;border:1px solid var(--border);">
+                  <div style="font-weight:500;">${escapeHtml(item.name || item.title || item.id)}</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                    ${item.type || item.status || ''} ${item.role ? '• ' + item.role : ''}
+                    ${item.capabilities && item.capabilities.length ? '• ' + (Array.isArray(item.capabilities) ? item.capabilities.join(', ') : item.capabilities) : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>`;
+          } else {
+            container.innerHTML = `<pre style="background:var(--bg-tertiary);padding:16px;border-radius:8px;overflow:auto;">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+          }
+        })
+        .catch(err => {
+          container.innerHTML = `<div class="chat-empty"><h2>Error</h2><p>${err.message}</p></div>`;
+        });
+      } else {
+        container.innerHTML = `<div class="chat-empty"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p>Coming soon</p></div>`;
+      }
+    }
+    
+    // Init
+    if (token && user) {
+      document.getElementById('authOverlay').style.display = 'none';
+      updateUserUI();
+    } else {
+      document.getElementById('authOverlay').style.display = 'flex';
     }
   </script>
 </body>
