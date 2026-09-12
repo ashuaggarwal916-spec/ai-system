@@ -7,26 +7,8 @@
       "source": "github.com/msitarzewski/agency-agents",
       "path": "capabilities/ai/agency-agents",
       "status": "active",
-      "capabilities": [
-        "230-specialist-agents",
-        "frontend-developer", "backend-architect", "devops-automator",
-        "ui-designer", "security-engineer", "penetration-tester",
-        "content-creator", "seo-specialist", "growth-hacker",
-        "data-engineer", "ai-engineer", "technical-writer",
-        "fullstack-developer", "mobile-developer", "game-developer",
-        "finance-tracker", "legal-compliance", "healthcare-agent",
-        "research-synthesist", "gis-analyst", "blockchain-auditor",
-        "prompt-engineer", "mcp-builder", "automation-governance"
-      ],
-      "brain_integration": {
-        "module": "agents",
-        "auto_detect": true,
-        "triggers": [
-          "build", "create", "develop", "design", "deploy",
-          "research", "write", "analyze", "test", "secure",
-          "optimize", "automate", "translate", "generate"
-        ]
-      },
+      "capabilities": ["230-specialist-agents", "frontend-developer", "backend-architect", "devops-automator", "ui-designer", "security-engineer", "content-creator", "seo-specialist", "growth-hacker", "data-engineer", "ai-engineer", "technical-writer", "fullstack-developer", "mobile-developer", "game-developer", "finance-tracker", "legal-compliance", "healthcare-agent", "research-synthesist", "gis-analyst", "blockchain-auditor", "prompt-engineer", "mcp-builder", "automation-governance"],
+      "brain_integration": { "module": "agents", "auto_detect": true, "triggers": ["build", "create", "develop", "design", "deploy", "research", "write", "analyze", "test", "secure", "optimize", "automate", "translate", "generate"] },
       "installed_at": "2026-09-12"
     },
     {
@@ -36,19 +18,8 @@
       "source": "github.com/hectorg2211/jarvis",
       "path": "capabilities/voice/jarvis",
       "status": "active",
-      "capabilities": [
-        "voice-wake",
-        "microphone-input",
-        "double-clap-detection",
-        "elevenlabs-tts",
-        "desktop-automation",
-        "multi-platform"
-      ],
-      "brain_integration": {
-        "module": "voice",
-        "auto_detect": true,
-        "triggers": ["voice", "speak", "talk", "listen", "wake"]
-      },
+      "capabilities": ["voice-wake", "microphone-input", "double-clap-detection", "elevenlabs-tts", "desktop-automation", "multi-platform"],
+      "brain_integration": { "module": "voice", "auto_detect": true, "triggers": ["voice", "speak", "talk", "listen", "wake"] },
       "installed_at": "2026-09-12"
     },
     {
@@ -58,22 +29,8 @@
       "source": "github.com/public-apis/public-apis",
       "path": "capabilities/api/public-apis",
       "status": "active",
-      "capabilities": [
-        "1000-free-apis",
-        "weather", "finance", "geocoding", "translation",
-        "image-generation", "text-analysis", "search",
-        "email-verification", "phone-validation", "ip-lookup",
-        "crypto", "sports", "movies", "books", "science",
-        "government", "health", "machine-learning"
-      ],
-      "brain_integration": {
-        "module": "api",
-        "auto_detect": true,
-        "triggers": [
-          "api", "fetch", "get data", "weather", "translate",
-          "geocode", "validate", "search", "analyze"
-        ]
-      },
+      "capabilities": ["1000-free-apis", "weather", "finance", "geocoding", "translation", "image-generation", "text-analysis", "search", "email-verification", "phone-validation", "ip-lookup", "crypto", "sports", "movies", "books", "science", "government", "health", "machine-learning"],
+      "brain_integration": { "module": "api", "auto_detect": true, "triggers": ["api", "fetch", "get data", "weather", "translate", "geocode", "validate", "search", "analyze"] },
       "installed_at": "2026-09-12"
     },
     {
@@ -83,36 +40,78 @@
       "source": "free-for.dev",
       "path": "capabilities/directory/free-for-dev.md",
       "status": "active",
-      "capabilities": [
-        "free-cloud-tiers",
-        "free-apis",
-        "free-databases",
-        "free-hosting",
-        "free-cdn",
-        "free-ci-cd",
-        "free-monitoring",
-        "free-email",
-        "free-storage",
-        "free-auth"
-      ],
-      "brain_integration": {
-        "module": "deploy",
-        "auto_detect": true,
-        "triggers": [
-          "deploy", "host", "free tier", "free api",
-          "cloud", "database", "cdn", "monitoring"
-        ]
-      },
+      "capabilities": ["free-cloud-tiers", "free-apis", "free-databases", "free-hosting", "free-cdn", "free-ci-cd", "free-monitoring", "free-email", "free-storage", "free-auth"],
+      "brain_integration": { "module": "deploy", "auto_detect": true, "triggers": ["deploy", "host", "free tier", "free api", "cloud", "database", "cdn", "monitoring"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "user-research-skill",
+      "name": "Cookiy AI User Research",
+      "category": "research",
+      "source": "github.com/cookiy-ai/user-research-skill",
+      "path": "capabilities/research/user-research-skill",
+      "status": "active",
+      "capabilities": ["user-research", "qualitative-interviews", "quantitative-surveys", "participant-recruitment", "study-planning", "data-synthesis", "insight-extraction", "research-reports"],
+      "brain_integration": { "module": "research", "auto_detect": true, "triggers": ["research", "user research", "interview", "survey", "study", "participants", "insights", "user feedback", "customer development"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "autosocial",
+      "name": "AutoSocial Studio",
+      "category": "social",
+      "source": "github.com/Katzca/AutoSocial",
+      "path": "capabilities/social/autosocial",
+      "status": "active",
+      "capabilities": ["tiktok-automation", "instagram-automation", "youtube-automation", "video-upload", "content-scheduling", "multi-account-management", "video-uniquification", "yt-dlp-download", "queue-management", "caption-templates", "ffmpeg-processing"],
+      "brain_integration": { "module": "social", "auto_detect": true, "triggers": ["tiktok", "instagram", "youtube", "reels", "shorts", "video", "post", "schedule", "upload", "social media", "content calendar", "automation"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "not-ai",
+      "name": "Not AI Content",
+      "category": "content",
+      "source": "github.com/udaysharmadev/Not-Ai",
+      "path": "capabilities/content/not-ai",
+      "status": "active",
+      "capabilities": ["human-like-writing", "ai-detection-avoidance", "voice-preservation", "structure-editing", "specificity-enhancement", "rhythm-editing", "register-adjustment", "fact-protection", "citation-protection"],
+      "brain_integration": { "module": "content", "auto_detect": true, "triggers": ["write", "content", "blog", "article", "post", "caption", "humanize", "natural", "authentic", "not ai", "ai-free"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "ai-roadmap",
+      "name": "AI Roadmap 2026",
+      "category": "skills",
+      "source": "github.com/udaysharmadev/Ai-Roadmap",
+      "path": "capabilities/skills/ai-roadmap",
+      "status": "active",
+      "capabilities": ["machine-learning", "deep-learning", "generative-ai", "llms", "rag", "ai-agents", "mlops", "deployment", "career-guide", "learning-paths", "quizzes", "notebooks", "projects"],
+      "brain_integration": { "module": "learning", "auto_detect": true, "triggers": ["learn", "ml", "ai", "deep learning", "llm", "rag", "agent", "deploy", "career", "study", "quiz", "notebook"] },
+      "installed_at": "2026-09-12"
+    },
+    {
+      "id": "linkedin-skills",
+      "name": "LinkedIn Marketing Skills",
+      "category": "social",
+      "source": "github.com/sergebulaev/linkedin-skills",
+      "path": "capabilities/social/linkedin-skills",
+      "status": "active",
+      "capabilities": ["linkedin-posts", "linkedin-comments", "linkedin-replies", "voice-engine", "content-drafting", "ai-tell-removal", "approve-before-publish", "apify-integration", "publora-integration", "11-marketing-skills"],
+      "brain_integration": { "module": "social", "auto_detect": true, "triggers": ["linkedin", "linkedin post", "linkedin comment", "linkedin reply", "professional", "b2b", "thought leadership", "personal brand"] },
       "installed_at": "2026-09-12"
     }
   ],
   "stats": {
-    "total_capabilities": 4,
+    "total_capabilities": 8,
     "by_category": {
       "ai": 1,
       "voice": 1,
       "api": 1,
-      "directory": 1
+      "directory": 1,
+      "research": 1,
+      "social": 2,
+      "content": 1,
+      "skills": 1
     }
-  }
+  },
+  "notes": "Instagram reel DdE2GlYw9lB could not be extracted (Instagram blocks automated access)"
 }
