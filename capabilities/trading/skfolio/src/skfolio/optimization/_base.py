@@ -1,0 +1,663 @@
+"""Base classes and utilities for portfolio optimization estimators.
+
+This module defines the abstract `BaseOptimization` estimator that all
+optimization algorithms in skfolio should inherit from.
+"""
+
+# Copyright (c) 2023-2026
+# Author: Hugo Delatte <hugo.delatte@skfoliolabs.com>
+# SPDX-License-Identifier: BSD-3-Clause
+# Implementation derived from:
+# scikit-portfolio, Copyright (c) 2022, Carlo Nicolini, Licensed under MIT Licence.
+# scikit-learn, Copyright (c) 2007-2010 David Cournapeau, Fabian Pedregosa, Olivier
+# Grisel Licensed under BSD 3 clause.
+
+from __future__ import annotations
+
+import warnings
+from abc import ABC, abstractmethod
+from collections.abc import Mapping
+from functools import wraps
+from typing import Any, Literal
+
+import numpy as np
+import pandas as pd
+import sklearn as sk
+import sklearn.base as skb
+from sklearn.utils.validation import check_is_fitted, validate_data
+
+import skfolio.typing as skt
+from skfolio._constants import (
+    _MANAGEMENT_FEES,
+    _PREVIOUS_WEIGHTS,
+    _RISK_FREE_RATE,
+    _TRANSACTION_COSTS,
+)
+from skfolio.measures import RatioMeasure
+from skfolio.population import Population
+from skfolio.portfolio import FailedPortfolio, Portfolio
+from skfolio.prior import ReturnDistribution
+from skfolio.typing import ArrayLike, FloatArray, StrArray
+from skfolio.utils.tools import input_to_array
+
+
+class BaseOptimization(skb.BaseEstimator, ABC):
+    """Base class for all portfolio optimizations in skfolio.
+
+    Parameters
+    ----------
+    portfolio_params : dict, optional
+        Portfolio parameters forwarded to the resulting `Portfolio` in `predict`.
+        Unless set in this dictionary, `transaction_costs`, `management_fees`,
+        `previous_weights` and `risk_free_rate` are forwarded from the optimizer when
+        available, and `name` defaults to the optimizer class name.
+        For example, `portfolio_params={"weight_drift": True}` evaluates the predicted
+        portfolios with drifted weights instead of the target weights on every
+        observation.
+
+    fallback : BaseOptimization | "previous_weights" | list[BaseOptimization | "previous_weights"], optional
+        Fallback estimator or a list of estimators to try, in order, when the primary
+        optimization raises during `fit`. Alternatively, use `"previous_weights"`
+        (alone or in a list) to fall back to the estimator's `previous_weights`.
+        When a fallback succeeds, its fitted `weights_` are copied back to the primary
+        estimator so that `fit` still returns the original instance. For traceability,
+        `fallback_` stores the successful estimator (or the string `"previous_weights"`)
+        and `fallback_chain_` stores each attempt with the associated outcome.
+
+    previous_weights : float | dict[str, float] | array-like of shape (n_assets,), optional
+        Previous asset weights. Some portfolio optimizers use this to compute costs or
+        turnover. Additionally, when `fallback="previous_weights"`, failures will fall
+        back to these weights if provided.
+
+    raise_on_failure : bool, default=True
+        Controls error handling when fitting fails.
+        If True, any failure during `fit` is raised immediately, no `weights_` are
+        set and subsequent calls to `predict` will raise a `NotFittedError`.
+        If False, errors are not raised; instead, a warning is emitted, `weights_`
+        is set to `None` and subsequent calls to `predict` will return a
+        `FailedPortfolio`. When fallbacks are specified, this behavior applies only
+        after all fallbacks have been exhausted.
+
+    Attributes
+    ----------
+    weights_ : ndarray of shape (n_assets,) or (n_optimizations, n_assets)
+        Weights of the assets.
+
+    n_features_in_ : int
+        Number of assets seen during `fit`.
+
+    feature_names_in_ : ndarray of shape (`n_features_in_`,)
+        Names of assets seen during `fit`. Defined only when `X`
+        has assets names that are all strings.
+
+    fallback_ : BaseOptimization | "previous_weights" | None
+        The fallback estimator instance, or the string `"previous_weights"`, that
+        produced the final result. `None` if no fallback was used.
+
+    fallback_chain_ : list[tuple[str, str]] | None
+        Sequence describing the optimization fallback attempts. Each element is a
+        pair `(estimator_repr, outcome)` where `estimator_repr` is the string
+        representation of the primary estimator or a fallback (e.g. `"EqualWeighted()"`,
+        `"previous_weights"`), and `outcome` is `"success"` if that step produced
+        a valid solution, otherwise the stringified error message. For successful
+        fits without any fallback, this is `None`.
+
+    error_ : str | list[str] | None
+        Captured error message(s) when `fit` fails. For multi-portfolio outputs
+        (`weights_` is 2D), this is a list aligned with portfolios.
+
+    Notes
+    -----
+    All estimators should specify all parameters as explicit keyword arguments in
+    `__init__` (no `*args` or `**kwargs`), following scikit-learn conventions.
+    """
+
+    weights_: FloatArray
+    n_features_in_: int
+    feature_names_in_: StrArray
+    fallback_: BaseOptimization | Literal["previous_weights"] | None
+    fallback_chain_: list[tuple[str, str]] | None
+    error_: str | list[str] | None
+
+    def __init__(
+        self,
+        portfolio_params: dict | None = None,
+        fallback: skt.Fallback = None,
+        previous_weights: skt.MultiInput | None = None,
+        raise_on_failure: bool = True,
+    ):
+        self.portfolio_params = portfolio_params
+        self.fallback = fallback
+        self.previous_weights = previous_weights
+        self.raise_on_failure = raise_on_failure
+
+    # Automatically wrap all subclasses' fit to add fallback behavior
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        original_fit = cls.__dict__.get("fit")
+        if original_fit is None or getattr(original_fit, "_fallback_wrapped", False):
+            return
+
+        @wraps(original_fit)
+        def _wrapped_fit(self, X: ArrayLike, y: ArrayLike | None = None, **fit_params):
+            self.fallback_ = None
+            self.fallback_chain_ = None
+            self.error_ = None
+
+            try:
+                original_fit(self, X, y, **fit_params)
+            except Exception as primary_error:
+                try:
+                    self._run_fallback_chain(
+                        X=X, y=y, primary_error=primary_error, **fit_params
+                    )
+                except Exception as last_error:
+                    self.error_ = str(last_error)
+                    if self.raise_on_failure:
+                        raise
+                    warnings.warn(
+                        (
+                            f"{self.__class__.__name__}.fit failed: {last_error}. "
+                            "Because raise_on_failure=False, weights_ is set to None. "
+                            "Inspect 'error_' and 'fallback_chain_' for details."
+                        ),
+                        stacklevel=2,
+                    )
+                    self.weights_ = None
+            return self
+
+        _wrapped_fit._fallback_wrapped = True
+        cls.fit = _wrapped_fit
+
+    def _run_fallback_chain(
+        self,
+        X: ArrayLike,
+        y: ArrayLike | None,
+        primary_error: Exception,
+        **fit_params,
+    ) -> None:
+        """Execute the configured fallback chain after a primary `fit` failure.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_observations, n_assets)
+            Training data passed to `fit`.
+
+        y : array-like or None
+            Optional target data.
+
+        primary_error : Exception
+            The exception raised by the primary estimator.
+
+        **fit_params : dict
+            Additional keyword arguments forwarded to each fallback's `fit`.
+
+        Raises
+        ------
+        Exception
+            Re-raises the last encountered error if all fallbacks fail.
+        """
+        fallback = self.fallback
+
+        if fallback is None:
+            raise primary_error
+
+        # Log the primary error in fallback_chain_ only when fallbacks are provided
+        self.fallback_chain_ = [(str(self), str(primary_error))]
+
+        n_assets = X.shape[1]
+
+        if not isinstance(fallback, list | tuple):
+            fallback = [fallback]
+
+        if len(fallback) == 0:
+            raise primary_error
+
+        last_error: Exception = primary_error
+        for fb in fallback:
+            try:
+                fb = _validate_fallback(fb)
+                if fb == _PREVIOUS_WEIGHTS:
+                    self._fallback_to_previous_weights_or_raise(n_assets=n_assets)
+                    return
+
+                fb_est = sk.clone(fb)
+
+                # previous_weights are propagated to the fallbacks
+                if self.previous_weights is not None:
+                    if fb_est.previous_weights is not None:
+                        warnings.warn(
+                            (
+                                "previous_weights are automatically propagated to "
+                                "fallback estimators. To silence this warning, leave "
+                                "the fallback's previous_weights as None."
+                            ),
+                            stacklevel=2,
+                        )
+                    fb_est.set_params(previous_weights=self.previous_weights)
+
+                fb_est.fit(X, y, **fit_params)
+
+                # Success: copy learned artifacts back to self
+                for name in ("weights_", "n_features_in_", "feature_names_in_"):
+                    setattr(self, name, getattr(fb_est, name))
+
+                self.fallback_ = fb_est
+                self.fallback_chain_.append((str(fb_est), "success"))
+                return
+            except Exception as err:  # try next fallback
+                last_error = err
+                self.fallback_chain_.append((str(fb), str(err)))
+                continue
+
+        # All fallbacks failed
+        if last_error is not None:
+            # Defer raising to the caller which decides based on raise_on_failure
+            raise last_error
+        raise RuntimeError(
+            "All fallback estimators failed; inspect 'fallback_chain_' for details."
+        )
+
+    def _fallback_to_previous_weights_or_raise(self, n_assets: int) -> None:
+        """Fallback to `previous_weights` or raise if unavailable/invalid.
+
+        Parameters
+        ----------
+        n_assets : int
+            Number of assets used to validate the shape of `previous_weights`.
+
+        Raises
+        ------
+        RuntimeError
+            If `previous_weights` is `None` when the fallback is requested.
+        """
+        try:
+            if self.previous_weights is None:
+                raise RuntimeError(
+                    "Fallback 'previous_weights' requested, but 'previous_weights' is None. "
+                    "Provide valid previous weights or remove this fallback."
+                )
+            investable_mask = getattr(self, "investable_mask_", None)
+            if investable_mask is not None:
+                n_assets = int(np.count_nonzero(investable_mask))
+            weights = self._clean_previous_weights(n_assets=n_assets)
+            self.weights_ = self._expand_weights_to_full_universe(weights=weights)
+            self.fallback_ = _PREVIOUS_WEIGHTS
+            self.fallback_chain_.append((_PREVIOUS_WEIGHTS, "success"))
+
+        except Exception as error:
+            self.fallback_chain_.append((_PREVIOUS_WEIGHTS, str(error)))
+            raise
+
+    @abstractmethod
+    def fit(self, X: ArrayLike, y: ArrayLike | None = None):
+        pass
+
+    def predict(self, X: ArrayLike | ReturnDistribution) -> Portfolio | Population:
+        """Predict the `Portfolio` or a `Population` of portfolios on `X`.
+
+        Optimization estimators can return a 1D or a 2D array of `weights`.
+        For a 1D array, the prediction is a single `Portfolio`.
+        For a 2D array, the prediction is a `Population` of `Portfolio`.
+
+        If `name` is not provided in the portfolio parameters, the estimator
+        class name is used.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_observations, n_assets) | ReturnDistribution
+            Asset returns or a `ReturnDistribution` carrying returns and optional
+            sample weights.
+
+        Returns
+        -------
+        Portfolio | Population
+            The predicted `Portfolio` or `Population` based on the fitted `weights`.
+        """
+        check_is_fitted(self, "weights_")
+
+        if self.portfolio_params is None:
+            ptf_kwargs = {}
+        else:
+            ptf_kwargs = self.portfolio_params.copy()
+
+        # Set X and sample_weight
+        if isinstance(X, ReturnDistribution):
+            ptf_kwargs["sample_weight"] = X.sample_weight
+            if hasattr(self, "feature_names_in_"):
+                ptf_kwargs["X"] = pd.DataFrame(
+                    X.returns, columns=self.feature_names_in_
+                )
+            else:
+                ptf_kwargs["X"] = X.returns
+        else:
+            ptf_kwargs["X"] = X
+
+        # Set the default portfolio parameters equal to the optimization parameters
+        for param in [
+            _TRANSACTION_COSTS,
+            _MANAGEMENT_FEES,
+            _PREVIOUS_WEIGHTS,
+            _RISK_FREE_RATE,
+        ]:
+            if param not in ptf_kwargs and hasattr(self, param):
+                ptf_kwargs[param] = getattr(self, param)
+
+        # If 'name' is not provided in the portfolio arguments, we use the first
+        name = ptf_kwargs.pop("name", type(self).__name__)
+
+        # Add fallback chain (partial_fit doesn't set fallback_chain_)
+        ptf_kwargs["fallback_chain"] = getattr(self, "fallback_chain_", None)
+
+        # If weights are None and raise_on_failure is False, we return a FailedPortfolio
+        if self.weights_ is None:
+            return FailedPortfolio(
+                name=name, optimization_error=self.error_, **ptf_kwargs
+            )
+
+        if not isinstance(X, ReturnDistribution):
+            _ = validate_data(self, X, reset=False, skip_check_array=True)
+
+        # Optimization estimators can return a 1D or a 2D array of weights.
+        # For a 1D array we return a portfolio.
+        if self.weights_.ndim == 1:
+            return Portfolio(weights=self.weights_, name=name, **ptf_kwargs)
+
+        # For a 2D array we return a population of portfolios.
+        n_portfolios = self.weights_.shape[0]
+        population = Population([])
+        for i in range(n_portfolios):
+            ptf_name = f"ptf{i} - {name}"
+            if np.isnan(self.weights_[i]).all():
+                error = self.error_[i] if isinstance(self.error_, list) else None
+                population.append(
+                    FailedPortfolio(
+                        name=ptf_name,
+                        optimization_error=error,
+                        **ptf_kwargs,
+                    )
+                )
+            else:
+                population.append(
+                    Portfolio(weights=self.weights_[i], name=ptf_name, **ptf_kwargs)
+                )
+        return population
+
+    def score(self, X: ArrayLike | ReturnDistribution, y: ArrayLike = None) -> float:
+        """Prediction score using the Sharpe Ratio.
+        If the prediction is a single `Portfolio`, the score is its Sharpe Ratio.
+        If the prediction is a `Population`, the score is the mean Sharpe Ratio
+        across portfolios.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_observations, n_assets)
+            Price returns of the assets.
+
+        y : Ignored
+            Not used, present here for API consistency by convention.
+
+        Returns
+        -------
+        score : float
+            The Sharpe Ratio of the portfolio if the prediction is a single `Portfolio`
+            or the mean of all the portfolio Sharpe Ratios if the prediction is a
+            `Population` of `Portfolio`.
+        """
+        result = self.predict(X)
+        if isinstance(result, Population):
+            return result.measures_mean(RatioMeasure.SHARPE_RATIO)
+        return result.sharpe_ratio
+
+    def fit_predict(self, X):
+        """Perform `fit` on `X` and returns the predicted `Portfolio` or
+        `Population` of `Portfolio` on `X` based on the fitted `weights`.
+        For factor models, use `fit(X, factors=...)` then `predict(X)` separately.
+
+        If fitting fails and `raise_on_failure=False`, this returns a
+        `FailedPortfolio`.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_observations, n_assets)
+            Price returns of the assets.
+
+        Returns
+        -------
+        Portfolio | Population
+            The predicted `Portfolio` or `Population` based on the fitted `weights`.
+        """
+        return self.fit(X).predict(X)
+
+    @property
+    def needs_previous_weights(self) -> bool:
+        """Whether `previous_weights` must be propagated between folds/rebalances.
+
+        Used by `cross_val_predict` and `online_predict` to decide whether to run
+        sequentially and pass the weights from the previous rebalancing to the next.
+        This is `True` when `portfolio_params` sets `weight_drift=True`, or when
+        transaction costs, a maximum turnover, or a fallback depending on
+        `previous_weights` are present.
+        """
+        if (getattr(self, "portfolio_params", None) or {}).get("weight_drift", False):
+            return True
+
+        if _has_transaction_cost(getattr(self, _TRANSACTION_COSTS, None)):
+            return True
+
+        if getattr(self, "max_turnover", None) is not None:
+            return True
+
+        fallback = self.fallback
+        if fallback is not None:
+            if not isinstance(fallback, list | tuple):
+                fallback = [fallback]
+
+            for fb in fallback:
+                fb = _validate_fallback(fb)
+                if fb == _PREVIOUS_WEIGHTS or fb.needs_previous_weights:
+                    return True
+
+        return False
+
+    def _prepare_investable_distribution(
+        self, return_distribution: ReturnDistribution, slim: bool = False
+    ) -> ReturnDistribution:
+        """Prepare the return distribution used by the optimizer.
+
+        The input `return_distribution` is defined on the full asset universe. This
+        method stores its `investable_mask` in `investable_mask_`, then returns the
+        distribution restricted to assets that can be used in the optimization problem.
+        Downstream helpers use `investable_mask_` to map user inputs and optimized
+        weights between the full universe and the investable subset.
+
+        Parameters
+        ----------
+        return_distribution : ReturnDistribution
+            Full-universe return distribution. Non-investable assets may be represented
+            by NaNs in `mu`, `covariance` or both.
+
+        slim : bool, default=False
+            If True, drop heavy diagnostic fields from the nested factor model when the
+            investable subset is built.
+
+        Returns
+        -------
+        ReturnDistribution
+            Return distribution restricted to investable assets.
+        """
+        self.investable_mask_ = return_distribution.investable_mask
+        return return_distribution.investable_subset(slim=slim)
+
+    def _expand_weights_to_full_universe(self, weights: FloatArray) -> FloatArray:
+        """Expand investable-subset weights to the full asset universe.
+
+        Optimization is performed on the investable subset prepared by
+        `_prepare_investable_distribution`. This method maps the optimized weights back
+        to the full universe, filling non-investable positions with zero so that
+        `weights_` stays aligned with the original assets passed to `fit`.
+
+        If `investable_mask_` is missing or None, all assets are investable and
+        `weights` is returned unchanged.
+
+        Parameters
+        ----------
+        weights : ndarray of shape (n_investable_assets,) or (..., n_investable_assets)
+            Optimized weights on the investable subset.
+
+        Returns
+        -------
+        ndarray of shape (n_assets,) or (..., n_assets)
+            Weights aligned with the full asset universe.
+        """
+        investable_mask = getattr(self, "investable_mask_", None)
+
+        if investable_mask is None:
+            return weights
+
+        n_full_universe = len(investable_mask)
+
+        if weights.ndim == 1:
+            full_weights = np.zeros(n_full_universe, dtype=weights.dtype)
+            full_weights[investable_mask] = weights
+        else:
+            full_weights = np.zeros(
+                (*weights.shape[:-1], n_full_universe), dtype=weights.dtype
+            )
+            full_weights[..., investable_mask] = weights
+        return full_weights
+
+    def _clean_input(
+        self,
+        value: float | dict | ArrayLike | None,
+        n_assets: int,
+        fill_value: Any,
+        name: str,
+    ) -> float | FloatArray:
+        """Convert input to a cleaned float or 1D ndarray.
+
+        When `investable_mask_` has been set (by `_prepare_investable_distribution`),
+        dictionary keys are resolved against the full-universe names and the result is
+        subsetted and array-like inputs sized for the full universe are sliced to match.
+
+        Parameters
+        ----------
+        value : float | dict | array-like | None
+            Input value to clean.
+
+        n_assets : int
+            Number of investable assets. Used to verify the shape of the converted array.
+
+        fill_value : Any
+            When `value` is a dictionary, keys not present in the asset names are filled
+            with `fill_value` in the converted array.
+
+        name : str
+            Name used for error messages.
+
+        Returns
+        -------
+        float | ndarray of shape (n_assets,)
+            The cleaned scalar or 1D array.
+        """
+        if value is None:
+            return fill_value
+        if np.isscalar(value):
+            return float(value)
+        return input_to_array(
+            items=value,
+            n_assets=n_assets,
+            fill_value=fill_value,
+            dim=1,
+            assets_names=getattr(self, "feature_names_in_", None),
+            investable_mask=getattr(self, "investable_mask_", None),
+            name=name,
+        )
+
+    def _clean_previous_weights(self, n_assets: int) -> FloatArray:
+        """Return validated previous weights as a 1D array of length `n_assets`.
+
+        Converts `previous_weights` to a numpy array using `_clean_input`, accepting
+        scalars, mappings keyed by asset name, or array-like inputs. Scalars are
+        broadcast to all assets. Missing assets in mappings are filled with zeros.
+
+        Parameters
+        ----------
+        n_assets : int
+            Number of assets; used to validate shape and for broadcasting.
+
+        Returns
+        -------
+        ndarray of shape (n_assets,)
+            Cleaned previous weights.
+        """
+        previous_weights = self._clean_input(
+            self.previous_weights,
+            n_assets=n_assets,
+            fill_value=0,
+            name=_PREVIOUS_WEIGHTS,
+        )
+        if np.isscalar(previous_weights):
+            previous_weights = np.full(n_assets, float(previous_weights))
+        return previous_weights
+
+
+def _validate_fallback(
+    fallback: Literal["previous_weights"] | BaseOptimization,
+) -> Literal["previous_weights"] | BaseOptimization:
+    """Validate the fallback specification.
+
+    Parameters
+    ----------
+    fallback : BaseOptimization | "previous_weights"
+        The configured fallback.
+
+    Returns
+    -------
+    BaseOptimization | "previous_weights"
+        The validated fallback, unchanged.
+
+    Raises
+    ------
+    ValueError
+        If `fallback` is a string different from `"previous_weights"`.
+    TypeError
+        If `fallback` is not a string and not an instance of `BaseOptimization`.
+    """
+    if isinstance(fallback, str):
+        if fallback != _PREVIOUS_WEIGHTS:
+            raise ValueError(
+                f"Unsupported string fallback: {fallback!r}. Only 'previous_weights' is allowed."
+            )
+        return _PREVIOUS_WEIGHTS
+    if not isinstance(fallback, BaseOptimization):
+        raise TypeError(
+            f"Fallback estimators must inherit from BaseOptimization (got {type(fallback).__name__})."
+        )
+    return fallback
+
+
+def _has_transaction_cost(x: Any) -> bool:
+    """Return True if any non-zero transaction cost is present in `x`.
+
+    Accepts scalars, arrays, nested mappings, or structures convertible to arrays.
+    Zero or empty values are treated as no cost.
+    """
+    if x is None:
+        return False
+
+    if isinstance(x, Mapping):
+        # Empty dict -> no costs; otherwise recurse
+        return any(_has_transaction_cost(v) for v in x.values())
+
+    try:
+        arr = np.asarray(x, dtype=float)
+    except Exception:
+        # If coercion fails, assume non-zero to be conservative
+        return True
+
+    if arr.size == 0:
+        return False
+
+    return not np.allclose(arr, 0.0, atol=1e-15, rtol=1e-18, equal_nan=False)

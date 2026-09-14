@@ -1,0 +1,20 @@
+User-agent: *
+Disallow: /*.ipynb$
+Disallow: /_downloads/
+Disallow: /_modules/
+Allow: /_modules/*.html$
+Disallow: /_sources/
+Disallow: /lite/
+
+User-agent: Googlebot
+User-agent: Bingbot
+Disallow: /*.ipynb$
+Disallow: /_downloads/
+Disallow: /_modules/
+Allow: /_modules/*.html$
+Disallow: /_sources/
+Disallow: /lite/
+Disallow: /*.html.md$
+Disallow: /llms-full.txt
+
+Sitemap: https://skfolio.org/sitemap.xml

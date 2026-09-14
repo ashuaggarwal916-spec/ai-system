@@ -1,0 +1,1278 @@
+"""Tools module."""
+
+# Copyright (c) 2023-2026
+# Author: Hugo Delatte <hugo.delatte@skfoliolabs.com>
+# SPDX-License-Identifier: BSD-3-Clause
+# Implementation derived from:
+# scikit-learn, Copyright (c) 2007-2010 David Cournapeau, Fabian Pedregosa, Olivier
+# Grisel Licensed under BSD 3 clause.
+
+from __future__ import annotations
+
+import warnings
+from collections.abc import Callable, Iterator, Mapping
+from enum import Enum
+from functools import wraps
+from inspect import signature
+from numbers import Integral, Real
+from typing import Any, Literal
+
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+import sklearn as sk
+import sklearn.base as skb
+from sklearn.utils import Bunch
+
+from skfolio._constants import _PASSTHROUGH
+from skfolio.typing import (
+    ArrayLike,
+    BoolArray,
+    FloatArray,
+    IntArray,
+    MultiInput,
+    StrArray,
+)
+
+__all__ = [
+    "AutoEnum",
+    "apply_window_size",
+    "args_names",
+    "bisection",
+    "cache_method",
+    "cached_property_slots",
+    "call_asset_panel_transform",
+    "check_estimator",
+    "deduplicate_names",
+    "default_asset_names",
+    "fit_and_predict",
+    "fit_single_estimator",
+    "format_measure",
+    "get_feature_names",
+    "half_life_to_decay_factor",
+    "input_to_array",
+    "optimal_rounding_decimals",
+    "safe_indexing",
+    "safe_split",
+    "validate_input_list",
+]
+
+GenericAlias = type(list[int])
+
+
+def call_asset_panel_transform(
+    estimator: skb.BaseEstimator,
+    X: ArrayLike,
+    fit_params: dict,
+    *,
+    method: str,
+) -> FloatArray:
+    """Call an `AssetPanel` transformer with validated fit parameters.
+
+    Metadata routing for descriptors and factor exposures uses the existing `fit`
+    bucket. The selected execution method (`fit_transform` or `partial_fit_transform`)
+    is passed explicitly.
+    """
+    fit_params = fit_params if fit_params is not None else {}
+    fit_params = _check_method_params(X, params=fit_params)
+    return _call_estimator(estimator, method=method, X=X, extra_params=fit_params)
+
+
+class AutoEnum(str, Enum):
+    """Base Enum class used in `skfolio`."""
+
+    @staticmethod
+    def _generate_next_value_(
+        name: str, start: int, count: int, last_values: Any
+    ) -> str:
+        """Overriding `auto()`."""
+        return name.lower()
+
+    @classmethod
+    def has(cls, value: str) -> bool:
+        """Check if a value is in the Enum.
+
+        Parameters
+        ----------
+        value : str
+            Input value.
+
+        Returns
+        -------
+        x : bool
+            True if the value is in the Enum, False otherwise.
+        """
+        return value in cls._value2member_map_
+
+    def __repr__(self) -> str:
+        """Representation of the Enum."""
+        return self.name
+
+
+# noinspection PyPep8Naming
+class cached_property_slots:
+    """Cached property decorator for slots."""
+
+    def __init__(self, func):
+        self.func = func
+        self.public_name = None
+        self.private_name = None
+        self.__doc__ = func.__doc__
+
+    def __set_name__(self, owner, name):
+        """Set Name."""
+        self.public_name = name
+        self.private_name = f"_{name}"
+
+    def __get__(self, instance, owner=None):
+        """Getter."""
+        if instance is None:
+            return self
+        if self.private_name is None:
+            raise TypeError(
+                "Cannot use cached_property instance without calling __set_name__"
+                " on it."
+            )
+        try:
+            value = getattr(instance, self.private_name)
+        except AttributeError:
+            value = self.func(instance)
+            setattr(instance, self.private_name, value)
+        return value
+
+    def __set__(self, instance, owner=None):
+        """Setter."""
+        raise AttributeError(
+            f"'{type(instance).__name__}' object attribute '{self.public_name}' is"
+            " read-only"
+        )
+
+    __class_getitem__ = classmethod(GenericAlias)
+
+
+def _make_key(args, kwds) -> int:
+    """Make a cache key from optionally typed positional and keyword arguments."""
+    key = args
+    if kwds:
+        for item in kwds.items():
+            key += item
+    return hash(key)
+
+
+def _make_indexable(iterable):
+    """Ensure iterable supports indexing or convert to an indexable variant.
+
+    Convert sparse matrices to csr and other non-indexable iterable to arrays.
+    Let `None` and indexable objects (e.g. pandas dataframes) pass unchanged.
+
+    Parameters
+    ----------
+    iterable : {list, dataframe, ndarray, sparse matrix} or None
+        Object to be converted to an indexable iterable.
+    """
+    if sp.issparse(iterable):
+        return iterable.tocsr()
+    elif hasattr(iterable, "__getitem__") or hasattr(iterable, "iloc"):
+        return iterable
+    elif iterable is None:
+        return iterable
+    return np.array(iterable)
+
+
+def _check_method_params(
+    X: ArrayLike,
+    params: dict,
+    indices: IntArray | slice | None = None,
+    axis: int = 0,
+):
+    """Check and validate the parameters passed to a specific method like `fit`.
+
+    Parameters
+    ----------
+    X : array-like of shape (n_samples, n_features)
+        Data array.
+
+    params : dict
+        Dictionary containing the parameters passed to the method.
+
+    indices : ndarray, slice,, optional
+        Indices or slice to be selected if the parameter has the same size as `X`.
+
+    axis : int, default=0
+        The axis along which `X` will be sub-sampled. `axis=0` will select rows while
+        `axis=1` will select columns.
+
+    Returns
+    -------
+    method_params_validated : dict
+        Validated parameters. We ensure that the values support indexing.
+    """
+    n_observations = X.shape[0]
+    method_params_validated = {}
+    for param_key, param_value in params.items():
+        if param_value.shape[0] != n_observations:
+            raise ValueError(
+                f"param_key has wrong number of observations, "
+                f"received={param_value.shape[0]}, "
+                f"expected={n_observations}"
+            )
+        method_params_validated[param_key] = _make_indexable(param_value)
+        method_params_validated[param_key] = safe_indexing(
+            X=method_params_validated[param_key], indices=indices, axis=axis
+        )
+    return method_params_validated
+
+
+def safe_indexing(
+    X: ArrayLike | pd.DataFrame,
+    indices: ArrayLike | slice | None,
+    axis: int = 0,
+):
+    """Return rows, items or columns of X using indices.
+
+    Parameters
+    ----------
+    X : array-like
+        Data from which to sample rows.
+
+    indices : array-like, slice, or None
+        Indices, slice, or None. When `None`, the entire data is returned.
+        When a `slice`, standard Python slicing is used (zero-copy for
+        NumPy arrays and :class:`~skfolio.containers.AssetPanel`).
+
+    axis : int, default=0
+        The axis along which `X` will be sub-sampled. `axis=0` will select
+        rows while `axis=1` will select columns.
+
+    Returns
+    -------
+    subset :
+        Subset of X on axis 0.
+    """
+    if indices is None:
+        return X
+    if isinstance(indices, slice):
+        if axis == 0:
+            return X[indices]
+        return X[:, indices]
+    if hasattr(X, "iloc"):
+        return X.take(indices, axis=axis)
+    if axis == 0:
+        return X[indices]
+    return X[:, indices]
+
+
+def safe_split(
+    X: ArrayLike,
+    y: ArrayLike | None = None,
+    indices: IntArray | slice | None = None,
+    axis: int = 0,
+):
+    """Create subset of dataset.
+
+    Slice X, y according to indices for cross-validation.
+
+    Parameters
+    ----------
+    X : array-like
+        Data to be indexed.
+
+    y : array-like
+        Data to be indexed.
+
+    indices : ndarray of int, optional
+        Rows or columns to select from X and y.
+        The default (`None`) is to select the entire data.
+
+    axis : int, default=0
+        The axis along which `X` will be sub-sampled. `axis=0` will select
+        rows while `axis=1` will select columns.
+
+    Returns
+    -------
+    X_subset : array-like
+        Indexed data.
+
+    y_subset : array-like
+        Indexed targets.
+    """
+    X_subset = safe_indexing(X, indices=indices, axis=axis)
+    if y is not None:
+        y_subset = safe_indexing(y, indices=indices, axis=axis)
+    else:
+        y_subset = None
+    return X_subset, y_subset
+
+
+def cache_method(cache_name: str) -> Callable:
+    """Decorator that caches class method results into a class dictionary.
+
+    Parameters
+    ----------
+    cache_name : str
+        Name of the dictionary class attribute.
+
+    Returns
+    -------
+    func : Callable
+        Decorating function that caches class methods.
+    """
+
+    # To avoid memory leakage and proper garbage collection, self should not be part of
+    # the cache key.
+    # This is a known issue when we use functools.lru_cache on class methods.
+    def decorating_function(method):
+        @wraps(method)
+        def wrapper(self, *args, **kwargs):
+            func_name = method.__name__
+            key = _make_key(args, kwargs)
+            try:
+                cache = getattr(self, cache_name)
+            except AttributeError:
+                raise AttributeError(
+                    "You first need to create a dictionary class attribute named "
+                    f"'{cache_name}'"
+                ) from None
+            if not isinstance(cache, dict):
+                raise AttributeError(
+                    f"'The cache named '{cache_name}' must be a "
+                    f"dictionary, got {type(cache)}"
+                )
+            if func_name not in cache:
+                cache[func_name] = {}
+            c = cache[func_name]
+            if key not in c:
+                c[key] = method(self, *args, **kwargs)
+            return c[key]
+
+        return wrapper
+
+    return decorating_function
+
+
+def args_names(func: object) -> list[str]:
+    """Returns the argument names of a function.
+
+    Parameters
+    ----------
+    func : object
+        Function.
+
+    Returns
+    -------
+    args : list[str]
+        The list of function arguments.
+    """
+    return [
+        v for v in func.__code__.co_varnames[: func.__code__.co_argcount] if v != "self"
+    ]
+
+
+def _is_real_number(value: object) -> bool:
+    """Return True for real-valued numbers, excluding booleans.
+
+    Accepts Python and NumPy real numeric types, such as `int`, `float`, `np.integer`
+    and `np.floating`. Python and NumPy booleans are excluded.
+
+    Parameters
+    ----------
+    value : object
+        Value to test.
+
+    Returns
+    -------
+    bool
+        True if `value` is a real-valued number and not a boolean; False otherwise.
+    """
+    return isinstance(value, Real) and not isinstance(value, (bool, np.bool_))
+
+
+def _is_integer_number(value: object) -> bool:
+    """Return True for integer-valued numbers, excluding booleans.
+
+    Accepts Python and NumPy integer scalar types, such as `int` and `np.integer`.
+    Python and NumPy booleans are excluded.
+
+    Parameters
+    ----------
+    value : object
+        Value to test.
+
+    Returns
+    -------
+    bool
+        True if `value` is an integer-valued number and not a boolean; False otherwise.
+    """
+    return isinstance(value, Integral) and not isinstance(value, (bool, np.bool_))
+
+
+def _is_bool(value: object) -> bool:
+    """Return True for boolean scalars (Python or NumPy).
+
+    Parameters
+    ----------
+    value : object
+        Value to test.
+
+    Returns
+    -------
+    bool
+        True if `value` is `bool` or `np.bool_`; False otherwise.
+    """
+    return isinstance(value, (bool, np.bool_))
+
+
+def _validate_bool(value: object, name: str) -> None:
+    """Raise `ValueError` unless `value` is a boolean."""
+    if not _is_bool(value):
+        raise ValueError(f"{name} must be a boolean, got {value!r}")
+
+
+def _validate_positive_real(value: object, name: str) -> None:
+    """Raise `ValueError` unless `value` is a finite positive real number."""
+    if not _is_real_number(value) or not np.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be a positive number, got {value!r}")
+
+
+def _validate_non_negative_real(value: object, name: str) -> None:
+    """Raise `ValueError` unless `value` is a finite non-negative real number."""
+    if not _is_real_number(value) or not np.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be a non-negative number, got {value!r}")
+
+
+def _validate_positive_integer(value: object, name: str) -> None:
+    """Raise `ValueError` unless `value` is a positive integer (>= 1)."""
+    if not _is_integer_number(value) or value < 1:
+        raise ValueError(f"{name} must be a positive integer (>= 1), got {value!r}")
+
+
+def _validate_non_negative_integer(value: object, name: str) -> None:
+    """Raise `ValueError` unless `value` is a non-negative integer (>= 0)."""
+    if not _is_integer_number(value) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer (>= 0), got {value!r}")
+
+
+def _validate_unit_interval(value: object, name: str) -> None:
+    """Raise `ValueError` unless `value` is a finite real number in [0, 1]."""
+    if not _is_real_number(value) or not np.isfinite(value) or not 0 <= value <= 1:
+        raise ValueError(
+            f"{name} must be a finite number between 0 and 1, got {value!r}"
+        )
+
+
+def check_estimator(
+    estimator: skb.BaseEstimator | Literal["passthrough"] | None,
+    default: skb.BaseEstimator | None,
+    check_type: Any,
+):
+    """Check the estimator type and return its cloned version if provided, otherwise
+    return the default estimator.
+
+    Parameters
+    ----------
+    estimator : BaseEstimator | "passthrough", optional
+        Estimator.
+
+    default : BaseEstimator, optional
+        Default estimator to return when `estimator` is `None`.
+
+    check_type : Any
+        Expected type of the estimator to check against.
+
+    Returns
+    -------
+    estimator : Estimator | "passthrough"
+        The checked estimator or the default.
+    """
+    if estimator is None:
+        return default
+    if estimator == _PASSTHROUGH:
+        return _PASSTHROUGH
+    if not isinstance(estimator, check_type):
+        raise TypeError(f"Expected type {check_type}, got {type(estimator)}")
+    return sk.clone(estimator)
+
+
+def _validate_mask(
+    X: FloatArray,
+    mask: ArrayLike | None,
+    name: str,
+) -> BoolArray | None:
+    """Validate a boolean mask aligned with `X`.
+
+    Parameters
+    ----------
+    X : ndarray of shape (n_observations, n_assets)
+        Reference data array.
+
+    mask : array-like of shape (n_observations, n_assets) or None
+        User-provided mask.
+
+    name : str
+        Mask name used in error messages.
+
+    Returns
+    -------
+    mask : ndarray of shape (n_observations, n_assets) or None
+        Validated boolean mask, or None if no mask was provided.
+    """
+    if mask is None:
+        return None
+
+    mask = np.asarray(mask, dtype=bool)
+    if mask.shape != X.shape:
+        raise ValueError(f"{name} shape {mask.shape} does not match X shape {X.shape}.")
+    return mask
+
+
+def input_to_array(
+    items: dict | ArrayLike,
+    n_assets: int,
+    fill_value: Any,
+    dim: int,
+    assets_names: StrArray | None,
+    name: str,
+    investable_mask: BoolArray | None = None,
+) -> FloatArray:
+    """Convert a collection of items (array-like or dictionary) into
+    a numpy array and verify its shape.
+
+    When `investable_mask` is provided, dictionary inputs are resolved against
+    the full `assets_names` and then subsetted, while array inputs sized to the
+    full universe are sliced down to the investable assets.  This allows callers
+    to pass user-facing parameters (keyed by asset name or sized for the full
+    universe) and transparently obtain arrays sized for the investable subset.
+
+    Parameters
+    ----------
+    items : FloatArray | dict | list
+        Items to verify and convert to array.
+
+    n_assets : int
+        Expected number of assets in the **output** array (i.e. the investable
+        count when `investable_mask` is provided).
+
+    fill_value : Any
+        When `items` is a dictionary, elements that are not in `asset_names` are filled
+        with `fill_value` in the converted array.
+
+    dim : int
+        Dimension of the final array.
+        Possible values are `1` or `2`.
+
+    assets_names : ndarray, optional
+        Asset names used when `items` is a dictionary.  When `investable_mask`
+        is provided, this must contain the **full-universe** names.
+
+    name : str
+        Name of the items used for error messages.
+
+    investable_mask : ndarray of shape (n_full_assets,), optional
+        Boolean mask selecting investable assets from the full universe.
+        When provided, dictionary inputs are first resolved against the full
+        universe then sliced, and array-like inputs sized to the full universe
+        are sliced along the last axis.
+
+    Returns
+    -------
+    values : ndarray of shape (n_assets) for dim=1 or (n_groups, n_assets) for dim=2
+        Converted array.
+    """
+    if dim not in [1, 2]:
+        raise ValueError(f"dim must be 1 or 2, got {dim}")
+    if isinstance(items, dict):
+        if assets_names is None:
+            raise ValueError(
+                f"If `{name}` is provided as a dictionary, you must input `X` as a"
+                " DataFrame with assets names in columns"
+            )
+        full_names = assets_names
+        if dim == 1:
+            arr = np.array([items.get(asset, fill_value) for asset in full_names])
+        else:
+            # add assets and convert dict to ordered array
+            arr = {}
+            for asset in full_names:
+                elem = items.get(asset)
+                if elem is None:
+                    elem = [asset]
+                elif np.isscalar(elem):
+                    elem = [asset, elem]
+                else:
+                    elem = [asset, *elem]
+                arr[asset] = elem
+            arr = (
+                pd.DataFrame.from_dict(arr, orient="index").loc[full_names].to_numpy().T
+            )
+        if investable_mask is not None:
+            arr = arr[..., investable_mask]
+    else:
+        arr = np.asarray(items)
+        if investable_mask is not None and arr.shape[-1] == len(investable_mask):
+            arr = arr[..., investable_mask]
+
+    if arr.ndim != dim:
+        raise ValueError(f"`{name}` must be a {dim}D array, got a {arr.ndim}D array")
+
+    if not isinstance(fill_value, str) and np.isnan(arr).any():
+        raise ValueError(f"`{name}` contains NaN")
+
+    if arr.shape[-1] != n_assets:
+        if dim == 1:
+            s = "(n_assets,)"
+        else:
+            s = "(n_groups, n_assets)"
+        raise ValueError(
+            f"`{name}` must be a of shape {s} with n_assets={n_assets}, "
+            f"got {arr.shape[0]}"
+        )
+    return arr
+
+
+def _get_liquidation_turnover_and_cost(
+    previous_weights: MultiInput | None,
+    transaction_costs: MultiInput | None,
+    assets_names: StrArray | None,
+    investable_mask: BoolArray | None = None,
+) -> tuple[float, float]:
+    """Return turnover and cost assuming full liquidation of excluded positions.
+
+    Positions outside the current asset set or investable subset have a target
+    weight of zero.
+
+    Parameters
+    ----------
+    previous_weights : float | dict[str, float] | array-like | None
+        Previous portfolio weights. A dictionary can include assets absent from
+        `assets_names`. Scalar and array inputs require `investable_mask` to
+        identify excluded positions. Arrays must cover the full universe to
+        contribute liquidation turnover. `None` means no previous holdings.
+
+    transaction_costs : float | dict[str, float] | array-like | None
+        Transaction cost rates. A scalar applies to all assets. Missing dictionary
+        entries default to zero. An array must align with `assets_names` and cover
+        all liquidated assets. `None` means no transaction costs.
+
+    assets_names : ndarray of shape (n_assets,), optional
+        Asset names before applying `investable_mask`. If `None`, column positions
+        are used when a mask is provided. Without names or a mask, the function
+        returns zero turnover and cost.
+
+    investable_mask : ndarray of shape (n_assets,), optional
+        Boolean mask selecting investable assets. Positions with a `False` entry
+        have a target weight of zero. If `None`, all assets in `assets_names` are
+        treated as investable.
+
+    Returns
+    -------
+    turnover : float
+        Sum of the absolute previous weights of excluded positions.
+
+    cost : float
+        Sum of those absolute weights multiplied by their transaction cost rates.
+
+    Raises
+    ------
+    ValueError
+        If an excluded position's weight is NaN or a transaction cost array cannot
+        provide rates for all liquidated assets.
+    """
+    if assets_names is None:
+        if investable_mask is None:
+            return 0.0, 0.0
+        # Use column positions as identifiers when asset names are unavailable.
+        assets_names = np.arange(len(investable_mask))
+
+    if not isinstance(previous_weights, dict):
+        if investable_mask is None or previous_weights is None:
+            return 0.0, 0.0
+        if np.isscalar(previous_weights):
+            previous_weights = np.full(len(assets_names), previous_weights)
+        if np.shape(previous_weights) != (len(assets_names),):
+            # Weights supplied only for the investable subset contain no exits.
+            return 0.0, 0.0
+        previous_weights = dict(zip(assets_names, previous_weights, strict=True))
+
+    active_assets = set(
+        assets_names if investable_mask is None else assets_names[investable_mask]
+    )
+    liquidated = {
+        asset: abs(weight)
+        for asset, weight in previous_weights.items()
+        if asset not in active_assets and weight != 0
+    }
+    turnover = float(sum(liquidated.values()))
+    if not liquidated:
+        return turnover, 0.0
+    if np.isnan(turnover):
+        raise ValueError("`previous_weights` contains NaN")
+    if transaction_costs is None:
+        return turnover, 0.0
+    if np.isscalar(transaction_costs):
+        return turnover, float(transaction_costs * turnover)
+    if not isinstance(transaction_costs, dict):
+        if np.shape(transaction_costs) != (len(assets_names),) or not set(
+            liquidated
+        ).issubset(assets_names):
+            raise ValueError(
+                "Transaction costs for liquidated assets are unavailable. "
+                "Use a scalar or an asset-name dictionary covering those assets."
+            )
+        transaction_costs = dict(zip(assets_names, transaction_costs, strict=True))
+    cost = sum(transaction_costs.get(asset, 0.0) * w for asset, w in liquidated.items())
+    return turnover, float(cost)
+
+
+def validate_input_list(
+    items: list[int | str],
+    n_assets: int,
+    assets_names: StrArray | None,
+    name: str,
+    raise_if_string_missing: bool = True,
+) -> list[int]:
+    """Convert a list of items (asset indices or asset names) into a list of
+    validated asset indices.
+
+    Parameters
+    ----------
+    items : list[int | str]
+       List of asset indices or asset names.
+
+    n_assets : int
+       Expected number of assets.
+       Used for verification.
+
+    assets_names : ndarray, optional
+       Asset names used when `items` contain strings.
+
+    name : str
+       Name of the items used for error messages.
+
+    raise_if_string_missing : bool, default=True
+        If set to True, raises an error if an item string is missing from assets_names;
+        otherwise, issue a User Warning.
+
+    Returns
+    -------
+    values : list[int]
+       Converted and validated list.
+    """
+    if len(set(items)) != len(items):
+        raise ValueError(f"Duplicates found in {items}")
+
+    asset_indices = set(range(n_assets))
+    res = []
+    for asset in items:
+        if isinstance(asset, str):
+            if assets_names is None:
+                raise ValueError(
+                    f"If `{name}` is provided as a list of string, you must input `X` "
+                    f"as a DataFrame with assets names in columns."
+                )
+            mask = assets_names == asset
+            if np.any(mask):
+                res.append(int(np.where(mask)[0][0]))
+            else:
+                if raise_if_string_missing:
+                    raise ValueError(f"{asset} not found in {assets_names}")
+                else:
+                    warnings.warn(f"{asset} not found in {assets_names}", stacklevel=2)
+        else:
+            if asset not in asset_indices:
+                raise ValueError(f"`central_assets` {asset} is not in {asset_indices}.")
+            res.append(int(asset))
+    return res
+
+
+def format_measure(x: float, percent: bool = False) -> str:
+    """Format a measure number into a user-friendly string.
+
+    Parameters
+    ----------
+    x : float
+        Number to format.
+
+    percent : bool, default=False
+        If this is set to True, the number is formatted in percentage.
+
+    Returns
+    -------
+    formatted : str
+        Formatted string.
+    """
+    if np.isnan(x):
+        return str(x)
+    if percent:
+        xn = x * 100
+        f = "%"
+    else:
+        xn = x
+        f = "f"
+    if xn == 0:
+        n = 0
+    else:
+        n = optimal_rounding_decimals(xn)
+    return "{value:{fmt}}".format(value=x, fmt=f".{n}{f}")
+
+
+def optimal_rounding_decimals(x: float) -> int:
+    """Return the optimal rounding decimal number for a user-friendly formatting.
+
+    Parameters
+    ----------
+    x : float
+        Number to round.
+
+    Returns
+    -------
+    n : int
+        Rounding decimal number.
+    """
+    if np.isclose(x, 0.0):
+        return 2
+    return min(6, max(int(-np.log10(abs(x))) + 2, 2))
+
+
+def bisection(x: list[FloatArray]) -> Iterator[list[FloatArray]]:
+    """Generator to bisect a list of arrays.
+
+    Parameters
+    ----------
+    x : list[ndarray]
+        A list of arrays.
+
+    Yields
+    ------
+    arr :  Iterator[list[ndarray, ndarray]]
+        Bisected array.
+    """
+    for e in x:
+        n = len(e)
+        if n > 1:
+            mid = n // 2
+            yield [e[0:mid], e[mid:n]]
+
+
+def fit_single_estimator(
+    estimator: Any,
+    X: ArrayLike,
+    y: ArrayLike | None,
+    fit_params: dict,
+    indices: IntArray | slice | None = None,
+    axis: int = 0,
+    method: str = "fit",
+):
+    """Fit (or partial-fit) an estimator on a subset of the data.
+
+    Parameters
+    ----------
+    estimator : estimator object implementing 'fit' and 'predict'
+        The object to use to fit the data.
+
+    X : array-like of shape (n_observations, n_assets)
+        The data to fit.
+
+    y : array-like of shape (n_observations, n_targets), optional
+        The target array if provided.
+
+    fit_params : dict
+        Parameters that will be passed to the estimator method.
+
+    indices : ndarray, slice, optional
+        Rows or columns to select from X, y, and fit_params.
+        The default (`None`) is to select the entire data.
+
+    axis : int, default=0
+        The axis along which `X` will be sub-sampled. `axis=0` will select
+        rows while `axis=1` will select columns.
+
+    method : str, default="fit"
+        Estimator method to call (e.g. `"fit"` or `"partial_fit"`).
+
+    Returns
+    -------
+    fitted_estimator : estimator
+        The fitted estimator.
+    """
+    fit_params = fit_params if fit_params is not None else {}
+    fit_params = _check_method_params(X, params=fit_params, indices=indices, axis=axis)
+
+    X, y = safe_split(X, y, indices=indices, axis=axis)
+    getattr(estimator, method)(X, y, **fit_params)
+    return estimator
+
+
+def fit_and_predict(
+    estimator: Any,
+    X: ArrayLike,
+    y: ArrayLike | None,
+    train: IntArray,
+    test: IntArray | list[IntArray],
+    fit_params: dict,
+    method: str,
+    column_indices: IntArray | None = None,
+) -> ArrayLike | list[ArrayLike]:
+    """Fit the estimator and predict values for a given dataset split.
+
+    Parameters
+    ----------
+    estimator : estimator object implementing 'fit' and 'predict'
+        The object to use to fit the data.
+
+    X : array-like of shape (n_observations, n_assets)
+        The data to fit.
+
+    y : array-like of shape (n_observations, n_factors) or None
+        The factor array if provided
+
+    train : ndarray of int of shape (n_train_observations,)
+        Indices of training samples.
+
+    test : ndarray of int of shape (n_test_samples,) or list of ndarray
+        Indices of test samples or list of indices.
+
+    fit_params : dict
+        Parameters that will be passed to `estimator.fit`.
+
+    method : str
+        Invokes the passed method name of the passed estimator.
+
+    column_indices : ndarray, optional
+        Indices of columns to select.
+        The default (`None`) is to select all columns.
+
+    Returns
+    -------
+    predictions : array-like or list of array-like
+        If `test` is an array, it returns the array-like result of calling
+        'estimator.method' on `test`.
+        Otherwise, if `test` is a list of arrays, it returns a list of array-like
+        results of calling 'estimator.method' on each test set in `test`.
+    """
+    fit_params = fit_params if fit_params is not None else {}
+    if column_indices is not None:
+        fit_params = _check_method_params(
+            X, params=fit_params, indices=column_indices, axis=1
+        )
+    fit_params = _check_method_params(X, params=fit_params, indices=train, axis=0)
+
+    X, y = safe_split(X, y, indices=column_indices, axis=1)
+    X_train, y_train = safe_split(X, y, indices=train, axis=0)
+    if y_train is None:
+        estimator.fit(X_train, **fit_params)
+    else:
+        estimator.fit(X_train, y_train, **fit_params)
+    func = getattr(estimator, method)
+
+    if isinstance(test, list):
+        predictions = []
+        for t in test:
+            X_test, _ = safe_split(X, indices=t, axis=0)
+            predictions.append(func(X_test))
+    else:
+        X_test, _ = safe_split(X, indices=test, axis=0)
+        predictions = func(X_test)
+
+    return predictions
+
+
+def default_asset_names(n_assets: int) -> StrArray:
+    """Default asset names are `["x0", "x1", ..., "x(n_assets - 1)"]`.
+
+    Parameters
+    ----------
+    n_assets : int
+        Number of assets.
+
+    Returns
+    -------
+    asset_names : ndarray of str
+        Default assets names.
+    """
+    return np.asarray([f"x{i}" for i in range(n_assets)], dtype=object)
+
+
+def deduplicate_names(names: ArrayLike) -> list[str]:
+    """Rename duplicated names by appending "_{duplicate_nb}" at the end.
+
+    This function is inspired by the pandas function `_maybe_dedup_names`.
+
+    Parameters
+    ----------
+    names : array-like of shape (n_names,)
+        List of names.
+
+    Returns
+    -------
+    names : list[str]
+        Deduplicate names.
+    """
+    names = list(names)
+    counts = {}
+    for i, col in enumerate(names):
+        cur_count = counts.get(col, 0)
+        if cur_count > 0:
+            names[i] = f"{col}_{cur_count}"
+        counts[col] = cur_count + 1
+    return names
+
+
+def get_feature_names(X):
+    """Get feature names from X.
+
+    Support for other array containers should place its implementation here.
+
+    Parameters
+    ----------
+    X : {ndarray, dataframe} of shape (n_samples, n_features)
+        Array container to extract feature names.
+
+        - pandas dataframe : The columns will be considered to be feature
+          names. If the dataframe contains non-string feature names, `None` is
+          returned.
+        - All other array containers will return `None`.
+
+    Returns
+    -------
+    names: ndarray or None
+        Feature names of `X`. Unrecognized array containers will return `None`.
+    """
+    feature_names = None
+
+    # extract feature names for support array containers
+    if isinstance(X, pd.DataFrame):
+        # Make sure we can inspect columns names from pandas, even with
+        # versions too old to expose a working implementation of
+        # __dataframe__.column_names() and avoid introducing any
+        # additional copy.
+        # TODO: remove the pandas-specific branch once the minimum supported
+        # version of pandas has a working implementation of
+        # __dataframe__.column_names() that is guaranteed to not introduce any
+        # additional copy of the data without having to impose allow_copy=False
+        # that could fail with other libraries. Note: in the longer term, we
+        # could decide to instead rely on the __dataframe_namespace__ API once
+        # adopted by our minimally supported pandas version.
+        feature_names = np.asarray(X.columns, dtype=object)
+    elif hasattr(X, "__dataframe__"):
+        df_protocol = X.__dataframe__()
+        feature_names = np.asarray(list(df_protocol.column_names()), dtype=object)
+
+    if feature_names is None or len(feature_names) == 0:
+        return
+
+    types = sorted(t.__qualname__ for t in set(type(v) for v in feature_names))
+
+    # mixed type of string and non-string is not supported
+    if len(types) > 1 and "str" in types:
+        raise TypeError(
+            "Feature names are only supported if all input features have string names, "
+            f"but your input has {types} as feature name / column name types. "
+            "If you want feature names to be stored and validated, you must convert "
+            "them all to strings, by using X.columns = X.columns.astype(str) for "
+            "example. Otherwise you can remove feature / column names from your input "
+            "data, or convert them all to a non-string data type."
+        )
+
+    # Only feature names of all strings are supported
+    if len(types) == 1 and types[0] == "str":
+        return feature_names
+
+
+def half_life_to_decay_factor(half_life: float) -> float:
+    r"""Convert half-life to exponential decay factor.
+
+    The decay factor (:math:`\lambda`) determines how much weight is given to past
+    observations in exponentially weighted calculations. It is computed from the
+    half-life using:
+
+    .. math::
+
+        \lambda = 2^{-1/\text{half-life}}
+
+    Parameters
+    ----------
+    half_life : float
+        Half-life in number of observations. This is the number of observations
+        for the weight to decay to 50%. Must be positive.
+
+    Returns
+    -------
+    decay_factor : float
+        The exponential decay factor (:math:`\lambda`), satisfying
+        :math:`0 < \lambda < 1`.
+
+    Examples
+    --------
+    >>> half_life_to_decay_factor(40)
+    0.9828...
+    """
+    if half_life <= 0:
+        raise ValueError(f"half_life must be positive, got {half_life}")
+    return 2.0 ** (-1.0 / half_life)
+
+
+def apply_window_size(X: ArrayLike, window_size: int | None) -> ArrayLike:
+    """Return the last `window_size` observations from the array X.
+
+    Parameters
+    ----------
+    X : ndarray of shape (n_observations,) or (n_observations, n_assets)
+        Input array from which to extract the last observations.
+        Can be 1D or 2D.
+
+    window_size : int or None
+        Number of observations to keep from the end of X.
+        If None, returns X unchanged.
+
+    Returns
+    -------
+    X_windowed : ndarray
+        The last `window_size` rows of X. If `window_size` is None,
+        returns the original array unchanged.
+
+    Raises
+    ------
+    ValueError
+        If `window_size` is not a positive integer or cannot be converted to int.
+    ValueError
+        If `window_size` exceeds the number of observations in X.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> X = np.array([[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]])
+    >>> apply_window_size(X, window_size=3)
+    array([[ 5,  6],
+           [ 7,  8],
+           [ 9, 10]])
+    """
+    if window_size is None:
+        return X
+
+    try:
+        window_size = int(window_size)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "window_size must be an integer or convertible to int."
+        ) from None
+
+    if window_size <= 0:
+        raise ValueError("window_size must be a positive integer.")
+
+    n_observations = len(X)
+    if window_size >= n_observations:
+        return X
+
+    return X[-window_size:]
+
+
+def _call_estimator(
+    estimator: Any,
+    method: str,
+    X: ArrayLike,
+    y: ArrayLike | None = None,
+    *,
+    routed_params: Bunch | None = None,
+    extra_params: Mapping[str, Any] | None = None,
+) -> Any:
+    """Call an estimator method with routed and extra parameters.
+
+    Parameters
+    ----------
+    estimator : Any
+        Estimator exposing the method named by `method`.
+
+    method : str
+        Method name to call on `estimator`.
+
+    X : array-like
+        Input data forwarded as the first positional argument.
+
+    y : array-like, optional
+        Target data forwarded as the second positional argument.
+
+    routed_params : Bunch, optional
+        Processed metadata routing payload exposing an attribute named after
+        `method`. That attribute must be a mapping of keyword arguments to
+        forward to the estimator method.
+
+    extra_params : mapping, optional
+        Additional keyword arguments passed directly to the estimator method.
+        These parameters must not overlap with those coming from
+        `routed_params`.
+
+    Returns
+    -------
+    object
+        Output returned by the estimator method.
+
+    Raises
+    ------
+    TypeError
+        If `estimator` does not implement `method`.
+
+    ValueError
+        If the same keyword argument is provided both through metadata routing
+        and `extra_params`.
+    """
+    method_caller = getattr(estimator, method, None)
+    if method_caller is None or not callable(method_caller):
+        estimator_name = type(estimator).__name__
+        if method == "partial_fit":
+            raise TypeError(
+                f"{estimator_name} does not implement partial_fit. "
+                "This meta-estimator can only use partial_fit with "
+                "sub-estimators that support incremental learning. "
+                "Use a compatible estimator with partial_fit, or call fit instead."
+            )
+        if method == "partial_fit_transform":
+            raise TypeError(
+                f"{estimator_name} does not implement partial_fit_transform. "
+                "This meta-estimator can only use partial_fit_transform with "
+                "sub-estimators that support online transformation. "
+                "Use a compatible estimator with partial_fit_transform, or call "
+                "fit_transform instead."
+            )
+        raise TypeError(f"{estimator_name} does not implement {method!r}.")
+
+    routed: Mapping[str, Any] = (
+        {} if routed_params is None else getattr(routed_params, method)
+    )
+    extra_params = {} if extra_params is None else extra_params
+
+    overlap = routed.keys() & extra_params.keys()
+    if overlap:
+        raise ValueError(
+            f"Conflicting parameters for {method!r}: {sorted(overlap)} "
+            "were provided both through metadata routing and extra_params."
+        )
+
+    return method_caller(X, y, **routed, **extra_params)
+
+
+def _filter_supported_params(estimator, method: str, **kwargs):
+    """Return keyword arguments accepted by an estimator method.
+
+    This helper is used for internally generated parameters that should be passed only
+    to estimators whose method signature explicitly accepts them. Parameters with value
+    `None` are omitted.
+
+    Parameters
+    ----------
+    estimator : estimator instance
+        Estimator exposing the method named by `method`.
+
+    method : str
+        Method name whose signature is inspected.
+
+    **kwargs : dict
+        Candidate keyword arguments.
+
+    Returns
+    -------
+    filtered : dict
+        Keyword arguments whose names are accepted by the estimator method and whose
+        values are not `None`.
+    """
+    params = signature(getattr(estimator, method)).parameters
+    return {k: v for k, v in kwargs.items() if k in params and v is not None}

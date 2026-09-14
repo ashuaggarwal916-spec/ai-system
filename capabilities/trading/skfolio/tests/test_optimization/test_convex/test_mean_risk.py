@@ -1,0 +1,2489 @@
+from __future__ import annotations
+
+import cvxpy as cp
+import numpy as np
+import pandas as pd
+import pytest
+import sklearn.model_selection as sks
+from sklearn import clone, config_context
+
+from skfolio import (
+    FailedPortfolio,
+    MultiPeriodPortfolio,
+    Population,
+    Portfolio,
+    RatioMeasure,
+    RiskMeasure,
+)
+from skfolio.model_selection import cross_val_predict
+from skfolio.moments import EWCovariance, EWMu, EmpiricalMu, ImpliedCovariance
+from skfolio.optimization import (
+    EqualWeighted,
+    MeanRisk,
+    ObjectiveFunction,
+)
+from skfolio.optimization.convex._mean_risk import _optimal_homogenization_factor
+from skfolio.prior import (
+    BlackLitterman,
+    EmpiricalPrior,
+    EntropyPooling,
+    TimeSeriesFactorModel,
+)
+from skfolio.uncertainty_set import (
+    EmpiricalCovarianceUncertaintySet,
+    EmpiricalMuUncertaintySet,
+)
+from skfolio.utils.equations import equations_to_matrix
+
+
+@pytest.fixture(scope="module")
+def precisions():
+    precisions = {e: 7 for e in RiskMeasure}
+    precisions[RiskMeasure.CDAR] = 6
+    precisions[RiskMeasure.SEMI_DEVIATION] = 6
+    precisions[RiskMeasure.MAX_DRAWDOWN] = 5
+    precisions[RiskMeasure.AVERAGE_DRAWDOWN] = 5
+    precisions[RiskMeasure.ULCER_INDEX] = 5
+    precisions[RiskMeasure.EVAR] = 6
+    precisions[RiskMeasure.GINI_MEAN_DIFFERENCE] = 6
+    return precisions
+
+
+@pytest.fixture(scope="module")
+def precisions2(precisions):
+    result = precisions.copy()
+    result[RiskMeasure.EDAR] = 5
+    result[RiskMeasure.EVAR] = 3
+    result[RiskMeasure.GINI_MEAN_DIFFERENCE] = 5
+    return result
+
+
+@pytest.fixture(scope="module")
+def precisions3(precisions):
+    result = precisions.copy()
+    result[RiskMeasure.VARIANCE] = 6
+    result[RiskMeasure.CVAR] = 6
+    result[RiskMeasure.WORST_REALIZATION] = 5
+    result[RiskMeasure.CDAR] = 5
+    result[RiskMeasure.EDAR] = 5
+    return result
+
+
+@pytest.fixture(scope="module")
+def X(X):
+    return X["2018-01-03":]
+
+
+@pytest.fixture(scope="module")
+def factors(factors):
+    return factors["2018-01-03":]
+
+
+@pytest.fixture(
+    scope="module",
+    params=[
+        rm
+        for rm in RiskMeasure
+        if not rm.is_annualized
+        and rm
+        not in [
+            RiskMeasure.GINI_MEAN_DIFFERENCE,
+            RiskMeasure.EDAR,
+            RiskMeasure.EVAR,
+        ]
+    ],
+)
+def risk_measure(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="module",
+    params=[RiskMeasure.GINI_MEAN_DIFFERENCE, RiskMeasure.EDAR],
+)
+def risk_measure2(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="module",
+    params=[
+        dict(min_weights=-1, max_weights=1),
+        dict(
+            min_weights=0,
+            max_weights=None,
+            budget=0.5,
+        ),
+        dict(
+            min_weights=-0.2,
+            max_weights=10,
+            budget=None,
+            min_budget=-1,
+            max_budget=1,
+        ),
+        dict(
+            min_weights=-1,
+            max_weights=1,
+            min_budget=-1,
+            budget=None,
+            max_budget=1,
+            max_short=0.5,
+            max_long=2,
+        ),
+    ],
+)
+def mean_risk_params(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="module",
+    params=[True, False],
+)
+def mean_risk_params_transaction_costs(request, previous_weights, transaction_costs):
+    if request.param:
+        return dict(
+            previous_weights=previous_weights,
+            transaction_costs=transaction_costs,
+        )
+    else:
+        return dict()
+
+
+@pytest.fixture(
+    scope="module",
+    params=[True, False],
+)
+def mean_risk_params_linear_constraints(request, groups, linear_constraints):
+    if request.param:
+        return dict(groups=groups, linear_constraints=linear_constraints)
+    else:
+        return dict()
+
+
+@pytest.fixture(
+    scope="module",
+    params=[True, False],
+)
+def mean_risk_params_inequalities(request, groups, linear_constraints):
+    _, _, left_inequality, right_inequality = equations_to_matrix(
+        groups=np.array(groups), equations=linear_constraints
+    )
+    if request.param:
+        return dict(left_inequality=left_inequality, right_inequality=right_inequality)
+    else:
+        return dict()
+
+
+@pytest.fixture(
+    scope="module",
+    params=[{"l1_coef": 0.01, "l2_coef": 0}, {"l1_coef": 0, "l2_coef": 0.1}],
+)
+def mean_risk_params_coef(request):
+    return request.param
+
+
+def test_cvx_cache(X):
+    _n_observations, n_assets = X.shape
+
+    model = MeanRisk()
+    model.fit(X)
+    w = cp.Variable(n_assets)
+    factor = cp.Constant(1)
+    model._clear_models_cache()
+    res = model._cvx_drawdown(
+        return_distribution=model.prior_estimator_.return_distribution_,
+        w=w,
+        factor=factor,
+    )
+    a = res[0]
+    assert len(res[1]) != 0
+    res = model._cvx_drawdown(
+        return_distribution=model.prior_estimator_.return_distribution_,
+        w=w,
+        factor=factor,
+    )
+    b = res[0]
+    assert len(res[1]) == 0
+    assert "__cvx_drawdown" in model._cvx_cache
+    assert hash(a) == hash(b)
+    model._clear_models_cache()
+    assert len(model._cvx_cache) == 0
+    res = model._cvx_returns(
+        return_distribution=model.prior_estimator_.return_distribution_, w=w
+    )
+    assert "_cvx_returns" in model._cvx_cache
+    res2 = model._cvx_returns(
+        return_distribution=model.prior_estimator_.return_distribution_, w=w
+    )
+    assert hash(res) == hash(res2)
+    model._clear_models_cache()
+    res3 = model._cvx_returns(
+        return_distribution=model.prior_estimator_.return_distribution_, w=w
+    )
+    assert hash(res) != hash(res3)
+
+
+def test_mean_risk_minimize_risk(
+    X,
+    precisions,
+    risk_measure,
+    mean_risk_params,
+    mean_risk_params_transaction_costs,
+    mean_risk_params_linear_constraints,
+    mean_risk_params_inequalities,
+):
+    if risk_measure not in {RiskMeasure.CVAR, RiskMeasure.CDAR}:
+        X = X.iloc[-250:]
+    params = {
+        **mean_risk_params,
+        **mean_risk_params_transaction_costs,
+        **mean_risk_params_linear_constraints,
+        **mean_risk_params_inequalities,
+    }
+    precision = precisions[risk_measure]
+
+    # Minimize risk
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure,
+        **params,
+    )
+
+    p = model.fit_predict(X)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+
+
+def test_mean_risk_minimize_risk_2(
+    X_small,
+    precisions,
+    risk_measure2,
+):
+    precision = precisions[risk_measure2]
+    X_test = (
+        X_small.iloc[-100:]
+        if risk_measure2 == RiskMeasure.GINI_MEAN_DIFFERENCE
+        else X_small
+    )
+
+    # Minimize risk
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure2,
+    )
+
+    p = model.fit_predict(X_test)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure2.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+
+
+@pytest.mark.filterwarnings("ignore:Solution may be inaccurate")
+def test_mean_risk_under_risk_and_return_constraint(
+    X,
+    precisions3,
+    risk_measure,
+    mean_risk_params,
+    mean_risk_params_transaction_costs,
+    mean_risk_params_linear_constraints,
+):
+    X = X.iloc[-250:]
+    params = {
+        **mean_risk_params,
+        **mean_risk_params_transaction_costs,
+        **mean_risk_params_linear_constraints,
+    }
+    precision = precisions3[risk_measure]
+    max_risk_arg = f"max_{risk_measure.value}"
+
+    # Minimize risk
+    min_risk_model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure,
+        **params,
+    )
+
+    min_risk_model_ptf = min_risk_model.fit_predict(X)
+    risk_constraint = min_risk_model.problem_values_["risk"] * 1.05
+
+    # Maximize return under upper risk constraint
+    max_return_model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        risk_measure=risk_measure,
+        **params,
+        **{max_risk_arg: risk_constraint},
+    )
+
+    p = max_return_model.fit_predict(X)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure.value), risk_constraint, precision
+    )
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure.value),
+        max_return_model.problem_values_["risk"],
+        precision,
+    )
+    np.testing.assert_almost_equal(
+        p.mean, max_return_model.problem_values_["expected_return"], precision
+    )
+    assert (
+        max_return_model.problem_values_["expected_return"]
+        >= min_risk_model_ptf.mean - 1e-6
+    )
+
+    # Minimize risk under lower return constraint
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure,
+        min_return=max_return_model.problem_values_["expected_return"],
+        **params,
+    )
+
+    p = model.fit_predict(X)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, max_return_model.problem_values_["expected_return"], precision
+    )
+
+
+def test_mean_risk_under_risk_and_return_constraint_2(
+    X_small,
+    precisions2,
+    risk_measure2,
+):
+    precision = precisions2[risk_measure2]
+    max_risk_arg = f"max_{risk_measure2.value}"
+    X_test = (
+        X_small.iloc[-100:]
+        if risk_measure2 == RiskMeasure.GINI_MEAN_DIFFERENCE
+        else X_small
+    )
+
+    # Minimize risk
+    min_risk_model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure2,
+    )
+
+    min_risk_model_ptf = min_risk_model.fit_predict(X_test)
+    risk_constraint = (min_risk_model.problem_values_["risk"] + 1e-7) * 1.05
+
+    # Maximize return under upper risk constraint
+    max_return_model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        risk_measure=risk_measure2,
+        **{max_risk_arg: risk_constraint},
+    )
+
+    p = max_return_model.fit_predict(X_test)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure2.value), risk_constraint, precision
+    )
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure2.value),
+        max_return_model.problem_values_["risk"],
+        precision,
+    )
+    np.testing.assert_almost_equal(
+        p.mean, max_return_model.problem_values_["expected_return"], precision
+    )
+    assert (
+        max_return_model.problem_values_["expected_return"]
+        >= min_risk_model_ptf.mean - 1e-6
+    )
+
+    # Minimize risk under lower return constraint
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure2,
+        min_return=max_return_model.problem_values_["expected_return"],
+    )
+
+    p = model.fit_predict(X_test)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure2.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, max_return_model.problem_values_["expected_return"], precision
+    )
+
+
+def test_mean_risk_utility(
+    X,
+    precisions,
+    risk_measure,
+    mean_risk_params,
+    mean_risk_params_transaction_costs,
+    mean_risk_params_linear_constraints,
+):
+    if risk_measure not in {
+        RiskMeasure.AVERAGE_DRAWDOWN,
+        RiskMeasure.CVAR,
+        RiskMeasure.MAX_DRAWDOWN,
+    }:
+        X = X.iloc[-250:]
+    params = {
+        **mean_risk_params,
+        **mean_risk_params_transaction_costs,
+        **mean_risk_params_linear_constraints,
+    }
+    precision = precisions[risk_measure]
+
+    # Maximize utility
+    risk_aversion = 3
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_UTILITY,
+        risk_measure=risk_measure,
+        risk_aversion=risk_aversion,
+        **params,
+    )
+
+    p = model.fit_predict(X)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+    utility = model.problem_values_["objective"]
+    p_utility = p.mean - risk_aversion * getattr(p, risk_measure.value)
+    np.testing.assert_almost_equal(p_utility, utility, precision)
+
+
+def test_mean_risk_utility2(
+    X_small,
+    precisions2,
+    risk_measure2,
+):
+    precision = precisions2[risk_measure2]
+    X_test = (
+        X_small.iloc[-100:]
+        if risk_measure2 == RiskMeasure.GINI_MEAN_DIFFERENCE
+        else X_small
+    )
+
+    # Maximize utility
+    risk_aversion = 3
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_UTILITY,
+        risk_measure=risk_measure2,
+        risk_aversion=risk_aversion,
+    )
+
+    p = model.fit_predict(X_test)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure2.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+    utility = model.problem_values_["objective"]
+    p_utility = p.mean - risk_aversion * getattr(p, risk_measure2.value)
+    np.testing.assert_almost_equal(p_utility, utility, precision)
+
+
+@pytest.mark.filterwarnings("ignore:Solution may be inaccurate")
+def test_mean_risk_ratio(
+    X,
+    precisions,
+    risk_measure,
+    mean_risk_params,
+    mean_risk_params_transaction_costs,
+    mean_risk_params_linear_constraints,
+):
+    X = X.iloc[-250:]
+    params = {
+        **mean_risk_params,
+        **mean_risk_params_transaction_costs,
+        **mean_risk_params_linear_constraints,
+    }
+    precision = precisions[risk_measure]
+
+    # Maximize ratio
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        risk_measure=risk_measure,
+        **params,
+    )
+    p = model.fit_predict(X)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+
+
+def test_mean_risk_ratio2(
+    X_small,
+    precisions2,
+    risk_measure2,
+):
+    precision = precisions2[risk_measure2]
+    X_test = (
+        X_small.iloc[-100:]
+        if risk_measure2 == RiskMeasure.GINI_MEAN_DIFFERENCE
+        else X_small
+    )
+
+    # Maximize ratio
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        risk_measure=risk_measure2,
+    )
+    p = model.fit_predict(X_test)
+    np.testing.assert_almost_equal(
+        getattr(p, risk_measure2.value), model.problem_values_["risk"], precision
+    )
+    np.testing.assert_almost_equal(
+        p.mean, model.problem_values_["expected_return"], precision
+    )
+
+
+def test_mean_risk_ratio_convergence(
+    X,
+    risk_measure,
+):
+    if risk_measure == RiskMeasure.VARIANCE:
+        risk_measure_verify = RiskMeasure.STANDARD_DEVIATION
+    elif risk_measure == RiskMeasure.SEMI_VARIANCE:
+        risk_measure_verify = RiskMeasure.SEMI_DEVIATION
+    else:
+        risk_measure_verify = risk_measure
+
+    # Maximize ratio
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=risk_measure
+    )
+    p = model.fit_predict(X)
+    ratio = p.mean / getattr(p, risk_measure_verify)
+
+    model = MeanRisk(
+        risk_measure=risk_measure,
+        efficient_frontier_size=30,
+    )
+    pop = model.fit_predict(X)
+    expected_ratio = max([p.mean / getattr(p, risk_measure_verify) for p in pop])
+    np.testing.assert_almost_equal(ratio, expected_ratio, 4)
+
+
+def test_mean_risk_feature_names_in_(X):
+    model = MeanRisk()
+    model.fit(X)
+    assert np.all(model.feature_names_in_ == X.columns)
+
+
+def test_mean_risk_get_params():
+    model = MeanRisk()
+    params = model.get_params(deep=True)
+    assert "prior_estimator" in params
+    assert params["prior_estimator"] is None
+    assert "prior_estimator__mu_estimator" not in params
+    model = MeanRisk(prior_estimator=EmpiricalPrior(mu_estimator=EmpiricalMu()))
+    params = model.get_params(deep=True)
+    assert "prior_estimator" in params
+    assert params["prior_estimator"] is not None
+    assert "prior_estimator__mu_estimator" in params
+    assert "prior_estimator__mu_estimator__window_size" in params
+
+
+def test_mean_risk_set_params():
+    model = MeanRisk()
+    with pytest.raises(AttributeError):
+        # noinspection PyTypeChecker
+        model.set_params(prior_estimator__mu_estimator__window_size=30)
+
+    model = MeanRisk(prior_estimator=EmpiricalPrior(mu_estimator=EmpiricalMu()))
+    # noinspection PyTypeChecker
+    model.set_params(prior_estimator__mu_estimator__window_size=30)
+
+    params = model.get_params(deep=True)
+    assert "prior_estimator__mu_estimator__window_size" in params
+    assert params["prior_estimator__mu_estimator__window_size"] == 30
+
+
+def test_mean_risk_non_investable_nan_assets_get_zero_weight(
+    nan_investable_test_data, fixed_return_distribution_prior
+):
+    X, mu, covariance, investable_mask = nan_investable_test_data
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        prior_estimator=fixed_return_distribution_prior(mu=mu, covariance=covariance),
+    )
+    model.fit(X)
+
+    np.testing.assert_array_equal(model.investable_mask_, investable_mask)
+    assert model.prior_estimator_.return_distribution_.n_assets == X.shape[1]
+    assert model.prior_estimator_.return_distribution_.n_investable_assets == 3
+    assert model.weights_.shape == (X.shape[1],)
+    assert np.isfinite(model.weights_).all()
+    np.testing.assert_almost_equal(model.weights_[~investable_mask], 0)
+    np.testing.assert_almost_equal(model.weights_.sum(), 1)
+
+    ref = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        prior_estimator=fixed_return_distribution_prior(
+            mu=mu[investable_mask],
+            covariance=covariance[np.ix_(investable_mask, investable_mask)],
+        ),
+    )
+    ref.fit(X.loc[:, investable_mask])
+    np.testing.assert_allclose(model.weights_[investable_mask], ref.weights_)
+
+
+def test_mean_risk_full_universe_constraints_ignore_non_investable_assets(
+    nan_investable_test_data, fixed_return_distribution_prior
+):
+    X, mu, covariance, _ = nan_investable_test_data
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        min_weights={"B": 0.45, "C": 0.99},
+        max_weights=np.array([1.0, 0.6, 0.0, 1.0]),
+        prior_estimator=fixed_return_distribution_prior(mu=mu, covariance=covariance),
+    )
+    model.fit(X)
+
+    assert model.weights_.shape == (X.shape[1],)
+    np.testing.assert_allclose(model.weights_[2], 0)
+    assert model.weights_[1] >= 0.45 - 1e-8
+    assert model.weights_[1] <= 0.6 + 1e-8
+    np.testing.assert_allclose(model.weights_.sum(), 1)
+
+
+def test_mean_risk_multiple_optimizations_expand_non_investable_nan_assets(
+    nan_investable_test_data, fixed_return_distribution_prior
+):
+    X, mu, covariance, _ = nan_investable_test_data
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        min_return=[0.012, 0.018],
+        prior_estimator=fixed_return_distribution_prior(mu=mu, covariance=covariance),
+    )
+    model.fit(X)
+
+    assert model.weights_.shape == (2, X.shape[1])
+    assert np.isfinite(model.weights_).all()
+    np.testing.assert_allclose(model.weights_[:, 2], 0)
+    np.testing.assert_allclose(model.weights_.sum(axis=1), 1)
+
+
+def test_mean_risk_predict_with_non_investable_nan_assets(
+    nan_investable_test_data, fixed_return_distribution_prior
+):
+    X, mu, covariance, investable_mask = nan_investable_test_data
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        prior_estimator=fixed_return_distribution_prior(mu=mu, covariance=covariance),
+    )
+    model.fit(X)
+    portfolio = model.predict(X)
+
+    assert isinstance(portfolio, Portfolio)
+    np.testing.assert_almost_equal(model.weights_[~investable_mask], 0)
+    assert np.isfinite(portfolio.returns).all()
+    expected_returns = (
+        X.iloc[:, investable_mask].to_numpy() @ model.weights_[investable_mask]
+    )
+    np.testing.assert_allclose(portfolio.returns, expected_returns)
+
+    X_missing_invested = X.copy()
+    X_missing_invested.iloc[0, 0] = np.nan
+    portfolio = model.predict(X_missing_invested)
+    assert np.isfinite(portfolio.returns).all()
+    expected_returns = (
+        np.nan_to_num(X_missing_invested.to_numpy(), nan=0.0) @ model.weights_
+    )
+    np.testing.assert_allclose(portfolio.returns, expected_returns)
+
+
+def test_mean_risk_predict_population_with_non_investable_nan_assets(
+    nan_investable_test_data, fixed_return_distribution_prior
+):
+    X, mu, covariance, _ = nan_investable_test_data
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        min_return=[0.012, 0.018],
+        prior_estimator=fixed_return_distribution_prior(mu=mu, covariance=covariance),
+    )
+    model.fit(X)
+    population = model.predict(X)
+
+    assert isinstance(population, Population)
+    assert model.weights_.shape == (2, X.shape[1])
+    np.testing.assert_allclose(model.weights_[:, 2], 0)
+    for portfolio in population:
+        assert portfolio.weights.shape == (X.shape[1],)
+        assert np.isfinite(portfolio.returns).all()
+
+
+def test_mean_risk_cross_val_predict_with_non_investable_nan_assets(
+    nan_investable_test_data, fixed_return_distribution_prior
+):
+    X, mu, covariance, _ = nan_investable_test_data
+
+    prediction_mpp = cross_val_predict(
+        MeanRisk(
+            objective_function=ObjectiveFunction.MINIMIZE_RISK,
+            risk_measure=RiskMeasure.VARIANCE,
+            prior_estimator=fixed_return_distribution_prior(
+                mu=mu, covariance=covariance
+            ),
+        ),
+        X,
+        cv=sks.KFold(n_splits=3),
+        n_jobs=None,
+    )
+
+    assert isinstance(prediction_mpp, MultiPeriodPortfolio)
+    assert np.asarray(prediction_mpp).shape == (X.shape[0],)
+    assert np.isfinite(prediction_mpp.returns).all()
+    for portfolio in prediction_mpp:
+        assert portfolio.weights.shape == (X.shape[1],)
+        np.testing.assert_almost_equal(portfolio.weights[2], 0)
+
+
+def test_mean_risk_with_ew_moments_and_active_mask_nan_assets():
+    X = pd.DataFrame(
+        [
+            [0.010, 0.020, 0.015, 0.030],
+            [0.020, 0.010, 0.010, 0.010],
+            [0.000, 0.030, 0.020, 0.020],
+            [0.010, 0.010, 0.025, 0.040],
+            [0.030, 0.020, np.nan, 0.010],
+            [0.020, 0.000, np.nan, 0.030],
+        ],
+        columns=["A", "B", "C", "D"],
+    )
+    active_mask = np.ones(X.shape, dtype=bool)
+    active_mask[-2:, 2] = False
+    investable_mask = np.array([True, True, False, True])
+
+    with config_context(enable_metadata_routing=True):
+        model = MeanRisk(
+            objective_function=ObjectiveFunction.MINIMIZE_RISK,
+            risk_measure=RiskMeasure.VARIANCE,
+            prior_estimator=EmpiricalPrior(
+                mu_estimator=EWMu(half_life=3, min_observations=1).set_fit_request(
+                    active_mask=True
+                ),
+                covariance_estimator=EWCovariance(
+                    half_life=3, min_observations=1, nearest=False
+                ).set_fit_request(active_mask=True),
+            ),
+        )
+        model.fit(X, active_mask=active_mask)
+
+    return_distribution = model.prior_estimator_.return_distribution_
+    np.testing.assert_array_equal(model.investable_mask_, investable_mask)
+    assert return_distribution.mu.shape == (X.shape[1],)
+    assert return_distribution.covariance.shape == (X.shape[1], X.shape[1])
+    assert np.isnan(return_distribution.mu[2])
+    assert np.isnan(return_distribution.covariance[2]).all()
+    assert np.isnan(return_distribution.covariance[:, 2]).all()
+
+    assert model.weights_.shape == (X.shape[1],)
+    assert np.isfinite(model.weights_).all()
+    np.testing.assert_allclose(model.weights_[2], 0)
+    np.testing.assert_allclose(model.weights_.sum(), 1)
+
+    portfolio = model.predict(X)
+    assert np.isfinite(portfolio.returns).all()
+    expected_returns = (
+        X.iloc[:, investable_mask].to_numpy() @ model.weights_[investable_mask]
+    )
+    np.testing.assert_allclose(portfolio.returns, expected_returns)
+
+
+def test_mean_risk_cross_val_predict(X):
+    prediction_mpp = cross_val_predict(
+        MeanRisk(), X, cv=sks.KFold(n_splits=5), n_jobs=None
+    )
+    assert isinstance(prediction_mpp, MultiPeriodPortfolio)
+    assert np.asarray(prediction_mpp).shape == (X.shape[0],)
+    pop = Population([prediction_mpp])
+    assert np.asarray(pop).shape == (1, X.shape[0])
+
+
+def test_mean_risk_predict(X):
+    model = MeanRisk()
+    portfolio = model.fit_predict(X)
+    assert isinstance(portfolio, Portfolio)
+    sharpe = model.score(X)
+    assert portfolio.sharpe_ratio == sharpe
+
+    model = MeanRisk(min_return=[0.0005, 0.0001])
+    model.fit(X)
+    population = model.predict(X)
+    assert isinstance(population, Population)
+
+    model = MeanRisk(min_return=[0.0005, 0.0001], max_cdar=0.15)
+    model.fit(X.to_numpy())
+    population = model.predict(X.to_numpy())
+    assert isinstance(population, Population)
+    assert population[0].cdar <= 0.15
+    assert population[1].cdar <= 0.15
+
+    model = MeanRisk(efficient_frontier_size=10)
+    model.fit(X)
+    population = model.predict(X)
+    assert isinstance(population, Population)
+    sharpe = model.score(X)
+    assert population.measures_mean(RatioMeasure.SHARPE_RATIO) == sharpe
+
+
+@pytest.mark.filterwarnings("ignore:Solution may be inaccurate")
+def test_regularization(X, risk_measure, mean_risk_params_coef):
+    X = X.iloc[-250:]
+    diff = 0.01
+
+    max_risk_arg = f"max_{risk_measure.value}"
+
+    # MINIMIZE_RISK
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure,
+    )
+    model.fit(X)
+    obj_ref = model.problem_values_["objective"]
+    w_ref = model.weights_
+
+    model.set_params(**mean_risk_params_coef)
+    model.fit(X)
+    obj = model.problem_values_["objective"]
+    w = model.weights_
+
+    assert obj > obj_ref
+    if mean_risk_params_coef["l2_coef"] != 0:
+        assert sum(np.square(w_ref)) - sum(np.square(w)) > diff
+
+    # MAXIMIZE_RETURN
+    risk = obj_ref * 1.2
+    # noinspection PyTypeChecker
+    model.set_params(
+        l1_coef=0,
+        l2_coef=0,
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        **{max_risk_arg: risk},
+    )
+    model.fit(X)
+    obj_ref = model.problem_values_["objective"]
+    w_ref = model.weights_
+
+    model.set_params(**mean_risk_params_coef)
+    model.fit(X)
+    obj = model.problem_values_["objective"]
+    w = model.weights_
+
+    assert obj < obj_ref
+    if mean_risk_params_coef["l2_coef"] != 0:
+        assert sum(np.square(w_ref)) - sum(np.square(w)) > diff
+
+    # MAXIMIZE_UTILITY
+    risk_aversion = 3
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_UTILITY,
+        risk_measure=risk_measure,
+        risk_aversion=risk_aversion,
+    )
+    model.fit(X)
+    obj_ref = model.problem_values_["objective"]
+    w_ref = model.weights_
+
+    model.set_params(**mean_risk_params_coef)
+    model.fit(X)
+    obj = model.problem_values_["objective"]
+    w = model.weights_
+    if risk_measure not in [RiskMeasure.EDAR]:
+        assert obj < obj_ref
+    if mean_risk_params_coef["l2_coef"] != 0:
+        assert sum(np.square(w_ref)) - sum(np.square(w)) > diff
+
+    # MAXIMIZE_RATIO
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        risk_measure=risk_measure,
+    )
+    model.fit(X)
+    w_ref = model.weights_
+
+    model.set_params(**mean_risk_params_coef)
+    model.fit(X)
+    w = model.weights_
+    if risk_measure not in [RiskMeasure.EDAR]:
+        if mean_risk_params_coef["l2_coef"] != 0:
+            assert sum(np.square(w_ref)) - sum(np.square(w)) > diff
+
+
+def test_worst_case_mean_variance(X):
+    diff = 0.001
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        mu_uncertainty_set_estimator=EmpiricalMuUncertaintySet(confidence_level=0.5),
+    )
+    # MINIMIZE_RISK
+    model.fit(X)
+    obj_ref = model.problem_values_["objective"]
+    w_ref = model.weights_
+    # noinspection PyTypeChecker
+    model.set_params(
+        covariance_uncertainty_set_estimator=EmpiricalCovarianceUncertaintySet(
+            confidence_level=0.5
+        ),
+    )
+    model.fit(X)
+    obj = model.problem_values_["objective"]
+    w = model.weights_
+
+    assert obj != obj_ref
+    assert sum(np.square(w_ref)) - sum(np.square(w)) > diff
+
+    # MAXIMIZE_RETURN
+    risk = obj_ref * 1.5
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        risk_measure=RiskMeasure.VARIANCE,
+        max_variance=risk,
+    )
+
+    model.fit(X)
+    obj_ref = model.problem_values_["objective"]
+    w_ref = model.weights_
+    # noinspection PyTypeChecker
+    model.set_params(
+        covariance_uncertainty_set_estimator=EmpiricalCovarianceUncertaintySet(
+            confidence_level=0.5
+        )
+    )
+    model.fit(X)
+    obj = model.problem_values_["objective"]
+    w = model.weights_
+
+    assert obj < obj_ref
+    assert sum(np.square(w_ref)) - sum(np.square(w)) > diff
+
+    # MAXIMIZE_RATIO
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        risk_measure=RiskMeasure.VARIANCE,
+    )
+
+    model.fit(X)
+    obj_ref = model.problem_values_["objective"]
+    w_ref = model.weights_
+    # noinspection PyTypeChecker
+    model.set_params(
+        scale_objective=1e-3,
+        covariance_uncertainty_set_estimator=EmpiricalCovarianceUncertaintySet(
+            confidence_level=0.5
+        ),
+    )
+
+    model.fit(X)
+    obj = model.problem_values_["objective"]
+    w = model.weights_
+
+    assert obj != obj_ref
+    assert sum(np.square(w_ref)) - sum(np.square(w)) > diff
+
+
+def test_standard_deviation_rejects_covariance_uncertainty(X):
+    model = MeanRisk(
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        covariance_uncertainty_set_estimator=EmpiricalCovarianceUncertaintySet(),
+    )
+
+    with pytest.raises(ValueError, match=r"risk_measure=RiskMeasure\.VARIANCE"):
+        model.fit(X)
+
+
+def test_covariance_uncertainty_requires_covariance_risk(X):
+    model = MeanRisk(
+        risk_measure=RiskMeasure.CVAR,
+        covariance_uncertainty_set_estimator=EmpiricalCovarianceUncertaintySet(),
+    )
+
+    with pytest.raises(ValueError, match=r"risk_measure=RiskMeasure\.VARIANCE"):
+        model.fit(X)
+
+
+def test_covariance_uncertainty_with_variance_limit(X):
+    model = MeanRisk(
+        risk_measure=RiskMeasure.CVAR,
+        max_variance=1.0,
+        covariance_uncertainty_set_estimator=EmpiricalCovarianceUncertaintySet(),
+    )
+
+    model.fit(X)
+
+    assert model.covariance_uncertainty_set_estimator_ is not None
+
+
+def test_transaction_costs(X, risk_measure):
+    n_assets = X.shape[1]
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        risk_measure=risk_measure,
+        budget=1,
+        min_weights=0,
+    )
+
+    # Ref with no transaction_costs
+    p_ref = model.fit_predict(X)
+    w_ref = model.weights_
+    # uniform transaction_costs for all assets and empty prev_weight --> no impact on
+    # weights
+    # noinspection PyTypeChecker
+    model.set_params(
+        transaction_costs=0.1 / 252, previous_weights=np.ones(n_assets) / n_assets
+    )
+    model.fit(X)
+    w = model.weights_
+    assert abs(w_ref - w).sum() > 5e-2
+
+    # transaction_costs on top two invested assets and uniform prev_weight --> impact on
+    # the two invested assets weight
+    asset_1 = p_ref.composition.index[0]
+    asset_2 = p_ref.composition.index[1]
+    above = 5e-2
+    transaction_costs = {asset_1: 0.2, asset_2: 0.5}
+    # noinspection PyTypeChecker
+    model.set_params(
+        transaction_costs=transaction_costs,
+        previous_weights=np.ones(n_assets) / n_assets,
+    )
+    p = model.fit_predict(X)
+    assert abs(p.get_weight(asset=asset_1)) < abs(p_ref.get_weight(asset=asset_1))
+    assert abs(p.get_weight(asset=asset_2)) < abs(p_ref.get_weight(asset=asset_2))
+    assert abs(p_ref.weights - p.weights).sum() > above
+
+
+@pytest.mark.filterwarnings("ignore:Solution may be inaccurate")
+def test_mean_risk_methods(X, risk_measure, precisions):
+    X = X.iloc[-250:]
+    n_assets = X.shape[1]
+    target_risk_arg = f"max_{risk_measure.value}"
+    precision = precisions[risk_measure]
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=risk_measure,
+        min_weights=0,
+    )
+
+    model.fit(X)
+    min_risk = model.problem_values_["risk"]
+
+    risk = min_risk * 1.1
+    # noinspection PyTypeChecker
+    model.set_params(
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        **{target_risk_arg: risk},
+    )
+
+    p = model.fit_predict(X)
+    ret = model.problem_values_["expected_return"]
+    np.testing.assert_almost_equal(risk, getattr(p, risk_measure.value), precision)
+    # noinspection PyTypeChecker
+    model.set_params(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        min_return=ret,
+        **{target_risk_arg: None},
+    )
+    p = model.fit_predict(X)
+    np.testing.assert_almost_equal(ret, p.mean, precision)
+
+    risks = [risk, risk * 1.1]
+    # noinspection PyTypeChecker
+    model.set_params(
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        min_return=None,
+        **{target_risk_arg: risks},
+    )
+    pop = model.fit_predict(X)
+    assert isinstance(pop, Population)
+    assert len(model.problem_values_) == 2
+    assert "objective" in model.problem_values_[0]
+    assert model.weights_.shape == (2, n_assets)
+    p0 = pop[0]
+    p1 = pop[1]
+    np.testing.assert_almost_equal(risks[0], getattr(p0, risk_measure.value), precision)
+    np.testing.assert_almost_equal(risks[1], getattr(p1, risk_measure.value), precision)
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        efficient_frontier_size=5,
+        risk_measure=risk_measure,
+        min_weights=0,
+    )
+    pop = model.fit_predict(X)
+    assert isinstance(pop, Population)
+    assert len(model.problem_values_) == 5
+    assert "objective" in model.problem_values_[0]
+    assert model.weights_.shape == (5, n_assets)
+    p = pop[0]
+    for i in range(1, 5):
+        pi = pop[i]
+        assert getattr(pi, risk_measure.value) > getattr(p, risk_measure.value)
+        p = pi
+
+
+def test_groups(X, groups, linear_constraints):
+    model = MeanRisk(groups=groups, linear_constraints=linear_constraints)
+
+    model.fit(X)
+    w1 = model.weights_
+    p1 = model.fit_predict(X)
+
+    np.testing.assert_almost_equal(sum(w1), 1)
+    assert np.all(w1 >= 0)
+    assert w1[:3].sum() <= 0.5 * w1[-12:].sum()
+    assert w1[:2].sum() >= 0.1
+    assert w1[2:10].sum() >= 0.5 * w1[3:8].sum()
+    assert w1[-10:].sum() <= 1
+
+    model.fit(np.array(X))
+    w2 = model.weights_
+    p2 = model.fit_predict(X)
+    np.testing.assert_almost_equal(w1, w2)
+
+    new_groups = {X.columns[i]: [groups[0][i], groups[1][i]] for i in range(20)}
+
+    model = MeanRisk(
+        groups=new_groups,
+        linear_constraints=linear_constraints,
+    )
+    model.fit(X)
+    w3 = model.weights_
+    p3 = model.fit_predict(X)
+    with pytest.raises(ValueError):
+        model.fit(np.array(X))
+    np.testing.assert_almost_equal(w1, w3)
+    np.testing.assert_almost_equal(p1.returns, p2.returns)
+    np.testing.assert_almost_equal(p1.returns, p3.returns)
+
+
+@pytest.mark.parametrize(
+    "objective_function",
+    list(ObjectiveFunction),
+)
+def test_tracking_error(X, factors, objective_function):
+    model = MeanRisk(max_tracking_error=0.005, objective_function=objective_function)
+    bench = factors["SIZE"]
+    p = model.fit(X, bench).predict(X)
+    tracking_error = np.std(p.returns - np.asarray(bench), ddof=1)
+    np.testing.assert_almost_equal(tracking_error, 0.005, 4)
+
+
+def test_turnover(X):
+    previous_weights = np.ones(20) / 20
+    model = MeanRisk(max_turnover=0.02, previous_weights=previous_weights)
+    p = model.fit(X).predict(X)
+    assert np.all(np.abs(p.weights - previous_weights) <= 0.02)
+
+
+def test_turnover_defaults_previous_weights_to_zero(X):
+    model = MeanRisk(max_turnover=0.1)
+    p = model.fit(X).predict(X)
+    assert np.all(p.previous_weights == 0)
+    assert np.all(np.abs(p.weights) <= 0.1 + 1e-10)
+
+
+def test_mean_risk_factor_model(X, factors):
+    model = MeanRisk(prior_estimator=TimeSeriesFactorModel())
+    portfolio = model.fit(X, factors=factors).predict(X)
+    assert isinstance(portfolio, Portfolio)
+
+
+def test_optimization_factor_black_litterman(X, factors):
+    n_observations, n_assets = X.shape
+    factor_views = ["MTUM - QUAL == 0.03 ", "SIZE - USMV== 0.04", "VLUE == 0.06"]
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        prior_estimator=TimeSeriesFactorModel(
+            factor_prior_estimator=BlackLitterman(
+                views=np.asarray(factor_views), tau=1 / n_observations
+            ),
+            higham=True,
+        ),
+    )
+    model.fit(X, factors=factors)
+
+    np.testing.assert_almost_equal(
+        model.prior_estimator_.return_distribution_.mu,
+        np.array(
+            [
+                0.04573766,
+                0.07949394,
+                0.05322793,
+                0.04596431,
+                0.04373008,
+                0.05400534,
+                0.03507889,
+                0.00876922,
+                0.04644162,
+                0.00956013,
+                0.01111351,
+                0.01195771,
+                0.04378188,
+                0.01147724,
+                0.0107007,
+                0.00863476,
+                0.06883195,
+                0.02906054,
+                0.01349415,
+                0.04004494,
+            ]
+        ),
+    )
+
+    assert model.prior_estimator_.return_distribution_.covariance.shape == (
+        n_assets,
+        n_assets,
+    )
+    np.testing.assert_almost_equal(
+        model.prior_estimator_.return_distribution_.covariance[:5, :5],
+        np.array(
+            [
+                [0.00044344, 0.00039761, 0.00024235, 0.00024845, 0.00021688],
+                [0.00039761, 0.00128024, 0.0003177, 0.0003276, 0.00028277],
+                [0.00024235, 0.0003177, 0.00049654, 0.00028651, 0.00028871],
+                [0.00024845, 0.0003276, 0.00028651, 0.00062628, 0.00024543],
+                [0.00021688, 0.00028277, 0.00028871, 0.00024543, 0.00049143],
+            ]
+        ),
+    )
+
+    np.testing.assert_almost_equal(
+        model.weights_,
+        np.array(
+            [
+                9.16729164e-02,
+                1.77277262e-01,
+                1.70172527e-01,
+                3.33402550e-02,
+                4.84628936e-02,
+                1.01425549e-01,
+                4.13694132e-07,
+                2.13725264e-07,
+                1.11720241e-01,
+                1.75328175e-07,
+                1.87868329e-07,
+                2.91340039e-07,
+                1.25681964e-01,
+                1.95824210e-07,
+                2.01124146e-07,
+                2.04242817e-07,
+                7.56855734e-02,
+                4.36684911e-07,
+                5.30564316e-07,
+                6.45579682e-02,
+            ]
+        ),
+    )
+
+
+def test_metadata_routing(X_small, implied_vol_small):
+    with config_context(enable_metadata_routing=True):
+        model = MeanRisk(
+            prior_estimator=EmpiricalPrior(
+                covariance_estimator=ImpliedCovariance().set_fit_request(
+                    implied_vol=True
+                )
+            )
+        )
+
+        with pytest.raises(ValueError):
+            model.fit(X_small)
+
+        model.fit(X_small, implied_vol=implied_vol_small)
+
+    # noinspection PyUnresolvedReferences
+    assert model.prior_estimator_.covariance_estimator_.r2_scores_.shape == (20,)
+
+
+def test_mean_risk_linear_constraints_equalities(X):
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.VARIANCE,
+        linear_constraints=["AMD == 0.2", "UNH==0.6"],
+    )
+    model.fit(X)
+    np.testing.assert_almost_equal(model.weights_[1], 0.2)
+    np.testing.assert_almost_equal(model.weights_[17], 0.6)
+
+
+@pytest.mark.parametrize(
+    "objective_function",
+    [ObjectiveFunction.MINIMIZE_RISK, ObjectiveFunction.MAXIMIZE_RATIO],
+)
+def test_group_cardinalities_constraint(X, groups, objective_function):
+    group_cardinalities = {"Equity": 2, "Bond": 5, "US": 1}
+
+    model = MeanRisk(
+        objective_function=objective_function,
+        min_weights=-0.03,
+        max_weights=0.2,
+        budget=0.9,
+        group_cardinalities=group_cardinalities,
+        groups=groups,
+        solver="SCIP",
+    )
+    model.fit(X)
+    w = model.weights_
+    active = np.abs(w) > 1e-10
+    groups_arr = np.asarray(groups)
+
+    assert np.sum(active) in [11, 12]
+    np.testing.assert_almost_equal(np.sum(w), 0.9)
+    assert np.max(w) - 0.2 <= 1e-8
+    assert np.min(w) + 0.03 >= -1e-8
+    for name, card in group_cardinalities.items():
+        n_active = int(np.sum(active & (groups_arr == name).any(axis=0)))
+        assert n_active <= card
+
+
+@pytest.mark.parametrize(
+    "objective_function",
+    [ObjectiveFunction.MINIMIZE_RISK, ObjectiveFunction.MAXIMIZE_RATIO],
+)
+def test_cardinality_and_group_cardinalities_constraint(X, groups, objective_function):
+    group_cardinalities = {"Equity": 2, "Bond": 5, "US": 1}
+
+    model = MeanRisk(
+        objective_function=objective_function,
+        min_weights=-0.03,
+        max_weights=0.2,
+        budget=0.9,
+        group_cardinalities=group_cardinalities,
+        cardinality=10,
+        groups=groups,
+        solver="SCIP",
+    )
+    model.fit(X)
+    w = model.weights_
+    assert np.sum(abs(w) > 1e-10) == 10
+    np.testing.assert_almost_equal(np.sum(w), 0.9)
+    assert np.max(w) - 0.2 <= 1e-8
+    assert np.min(w) + 0.03 >= -1e-8
+
+
+@pytest.mark.parametrize(
+    "objective_function",
+    [ObjectiveFunction.MINIMIZE_RISK, ObjectiveFunction.MAXIMIZE_RATIO],
+)
+@pytest.mark.parametrize("cardinality", [7, 11, 15, 20])
+def test_cardinality_constraint(X, objective_function, cardinality):
+    max_weights = 1 / (cardinality - 2)
+    model = MeanRisk(
+        objective_function=objective_function,
+        min_weights=-0.03,
+        max_weights=max_weights,
+        budget=0.9,
+        cardinality=cardinality,
+        solver="SCIP",
+    )
+    model.fit(X)
+    w = model.weights_
+    assert np.sum(abs(w) > 1e-10) == cardinality
+    np.testing.assert_almost_equal(np.sum(w), 0.9)
+    assert np.max(w) - max_weights <= 1e-6
+    assert np.min(w) + 0.03 >= -1e-6
+
+
+def test_cardinality_constraint_ratio_convergence(X):
+    risk_measure = RiskMeasure.STANDARD_DEVIATION
+    X_test = X.iloc[:, :10]
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        min_weights=-0.03,
+        max_weights=0.35,
+        budget=0.9,
+        cardinality=4,
+        risk_measure=risk_measure,
+        solver="SCIP",
+    )
+    p = model.fit_predict(X_test)
+    ratio = p.mean / getattr(p, risk_measure)
+
+    model = MeanRisk(
+        risk_measure=risk_measure,
+        min_weights=-0.03,
+        max_weights=0.35,
+        budget=0.9,
+        cardinality=4,
+        efficient_frontier_size=10,
+        solver="SCIP",
+    )
+    pop = model.fit_predict(X_test)
+    expected_ratio = max([p.mean / getattr(p, risk_measure) for p in pop])
+    np.testing.assert_almost_equal(ratio, expected_ratio, 4)
+
+
+def test_scip_clarabel_convergence(X):
+    model = MeanRisk(
+        min_weights=0,
+        max_weights=0.8,
+        budget=0.9,
+    )
+    model.fit(X)
+    w1 = model.weights_
+    # noinspection PyTypeChecker
+    model.set_params(solver="SCIP")
+    model.fit(X)
+    w2 = model.weights_
+
+    np.testing.assert_array_almost_equal(w1, w2, 4)
+
+
+@pytest.mark.parametrize(
+    "objective_function",
+    [ObjectiveFunction.MINIMIZE_RISK, ObjectiveFunction.MAXIMIZE_RATIO],
+)
+def test_mip_threshold_constraints_long(X, objective_function):
+    model = MeanRisk(
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        objective_function=objective_function,
+        max_weights=0.15,
+        solver="SCIP",
+    )
+    model.fit(X)
+    w1 = model.weights_
+
+    threshold_long = 0.05
+    assert np.any((w1 < threshold_long - 1e-8) & (w1 > 0 + 1e-8))
+    # noinspection PyTypeChecker
+    model.set_params(threshold_long=threshold_long)
+    model.fit(X)
+    w2 = model.weights_
+    assert not np.any((w2 < threshold_long - 1e-8) & (w2 > 0 + 1e-8))
+    np.testing.assert_almost_equal(np.sum(w2), 1)
+    assert np.max(w2) - 0.15 <= 1e-8
+    assert np.min(w2) >= -1e-8
+
+
+@pytest.mark.parametrize(
+    "objective_function",
+    [ObjectiveFunction.MINIMIZE_RISK, ObjectiveFunction.MAXIMIZE_RATIO],
+)
+def test_mip_threshold_constraints_long_short(X, objective_function):
+    model = MeanRisk(
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        objective_function=objective_function,
+        min_weights=-0.8,
+        max_weights=0.8,
+        budget=0.5,
+        solver="SCIP",
+    )
+    model.fit(X)
+    w1 = model.weights_
+
+    threshold_long = 0.05
+    threshold_short = -0.03
+
+    assert np.any((w1 < threshold_long - 1e-8) & (w1 > 0 + 1e-8))
+    assert np.any((w1 > threshold_short + 1e-8) & (w1 < 0 - 1e-8))
+    # noinspection PyTypeChecker
+    model.set_params(threshold_long=threshold_long)
+    with pytest.raises(
+        ValueError,
+        match=r"When 'threshold_long' is provided*",
+    ):
+        model.fit(X)
+    # noinspection PyTypeChecker
+    model.set_params(threshold_long=threshold_long, threshold_short=threshold_short)
+    model.fit(X)
+    w2 = model.weights_
+
+    assert not np.any((w2 < threshold_long - 1e-8) & (w2 > 0 + 1e-8))
+    assert not np.any((w2 > threshold_short + 1e-8) & (w2 < 0 - 1e-8))
+    np.testing.assert_almost_equal(np.sum(w2), 0.5)
+    assert np.max(w2) - 0.8 <= 1e-8
+    assert np.min(w2) + 0.8 >= -1e-8
+
+
+@pytest.mark.parametrize(
+    "mu,expected",
+    [
+        [np.array([1, 2, 3]), 2.0],
+        [np.array([-1, -2, -3]), 2.0],
+        [np.array([1000, 2000, 3000]), 1e3],
+        [np.array([0, -2e-4, 3e-4]), 1e-3],
+    ],
+)
+def test_optimal_homogenization_factor(mu, expected):
+    res = _optimal_homogenization_factor(mu)
+    assert res == expected
+
+
+def test_mip_cardinality_and_threshold_constraints_long_short(X):
+    X_test = X.iloc[:, :12]
+    model = MeanRisk(
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+        min_weights=-0.8,
+        max_weights=0.8,
+        budget=0.5,
+        solver="SCIP",
+    )
+    model.fit(X_test)
+    w = model.weights_
+
+    cardinality = 6
+    threshold_long = 0.1
+    threshold_short = -0.05
+
+    assert np.sum(abs(w) > 1e-10) == X_test.shape[1]
+    assert np.any((w < threshold_long - 1e-8) & (w > 0 + 1e-8))
+    assert np.any((w > threshold_short + 1e-8) & (w < 0 - 1e-8))
+
+    # noinspection PyTypeChecker
+    model.set_params(
+        cardinality=cardinality,
+        threshold_long=threshold_long,
+        threshold_short=threshold_short,
+    )
+    model.fit(X_test)
+    w = model.weights_
+
+    assert np.sum(abs(w) > 1e-10) == cardinality
+    assert not np.any((w < threshold_long - 1e-8) & (w > 0 + 1e-8))
+    assert not np.any((w > threshold_short + 1e-8) & (w < 0 - 1e-8))
+    np.testing.assert_almost_equal(np.sum(w), 0.5)
+    assert np.max(w) - 0.8 <= 1e-8
+    assert np.min(w) + 0.8 >= -1e-8
+
+
+def test_optim_with_equal_weighted_sample_weight(X, risk_measure):
+    """No sample weight and equal-weighted sample weight should give the same result"""
+    ref = MeanRisk(risk_measure=risk_measure)
+    ref.fit(X)
+
+    model = MeanRisk(risk_measure=risk_measure, prior_estimator=EntropyPooling())
+    model.fit(X)
+
+    np.testing.assert_almost_equal(model.weights_, ref.weights_, 6)
+
+
+@pytest.mark.parametrize(
+    "risk_measure,view_params,expected_weights",
+    [
+        (
+            RiskMeasure.CVAR,
+            dict(cvar_views=["PG == 0.05"]),
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.12992,
+                0.0,
+                0.0,
+                0.0,
+                0.43883,
+                0.0,
+                0.0,
+                0.09788,
+                0.0,
+                0.06918,
+                0.01264,
+                0.25155,
+                0.0,
+            ],
+        ),
+        (
+            RiskMeasure.MEAN_ABSOLUTE_DEVIATION,
+            dict(variance_views=["PG == 0.0005"]),
+            [
+                0.0,
+                0.0035,
+                0.0,
+                0.00019,
+                0.0,
+                0.0,
+                0.0414,
+                0.18666,
+                0.0,
+                0.23537,
+                0.0,
+                0.21898,
+                0.0,
+                0.0,
+                0.00728,
+                0.0,
+                0.0,
+                0.00247,
+                0.23798,
+                0.06616,
+            ],
+        ),
+        (
+            RiskMeasure.VARIANCE,
+            dict(variance_views=["PG == 0.0005"]),
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.18293,
+                0.0,
+                0.26654,
+                0.0,
+                0.40648,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.09778,
+                0.04628,
+            ],
+        ),
+        (
+            RiskMeasure.STANDARD_DEVIATION,
+            dict(variance_views=["PG == 0.0005"]),
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.18297,
+                0.0,
+                0.26666,
+                0.0,
+                0.4065,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.09772,
+                0.04614,
+            ],
+        ),
+        (
+            RiskMeasure.SEMI_DEVIATION,
+            dict(variance_views=["PG == 0.0005"]),
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.27054,
+                0.0,
+                0.04966,
+                0.0,
+                0.38977,
+                0.0,
+                0.0,
+                0.02559,
+                0.0,
+                0.04024,
+                0.0,
+                0.2242,
+                0.0,
+            ],
+        ),
+        (
+            RiskMeasure.SEMI_VARIANCE,
+            dict(variance_views=["PG == 0.0005"]),
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.27054,
+                0.0,
+                0.04966,
+                0.0,
+                0.38977,
+                0.0,
+                0.0,
+                0.02559,
+                0.0,
+                0.04024,
+                0.0,
+                0.2242,
+                0.0,
+            ],
+        ),
+        (
+            RiskMeasure.FIRST_LOWER_PARTIAL_MOMENT,
+            dict(variance_views=["PG == 0.0005"]),
+            [
+                0.0,
+                0.0035,
+                0.0,
+                0.00019,
+                0.0,
+                0.0,
+                0.0414,
+                0.18666,
+                0.0,
+                0.23537,
+                0.0,
+                0.21898,
+                0.0,
+                0.0,
+                0.00728,
+                0.0,
+                0.0,
+                0.00247,
+                0.23798,
+                0.06616,
+            ],
+        ),
+    ],
+)
+def test_sample_weight(X, risk_measure, view_params, expected_weights):
+    ref = MeanRisk(risk_measure=risk_measure)
+    ref.fit(X)
+
+    model = clone(ref)
+    model = model.set_params(prior_estimator=EntropyPooling(**view_params))
+    model.fit(X)
+
+    assert model.weights_[15] < ref.weights_[15]
+
+    np.testing.assert_almost_equal(model.weights_, expected_weights, 4)
+
+    ref_ptf = ref.predict(X)
+    ptf = model.predict(X)
+
+    assert getattr(ref_ptf, risk_measure.value) < getattr(ptf, risk_measure.value)
+
+    sample_weight = model.prior_estimator_.return_distribution_.sample_weight
+
+    ref_ptf.sample_weight = sample_weight
+    ptf.sample_weight = sample_weight
+
+    assert getattr(ref_ptf, risk_measure.value) > getattr(ptf, risk_measure.value)
+
+
+def test_max_ratio_with_neg_f1(X):
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_free_rate=0.002
+    )
+    model.fit(X)
+
+    with pytest.raises(
+        ValueError, match="Cannot optimize for Maximum Ratio with your current"
+    ):
+        model = MeanRisk(
+            objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_free_rate=0.0025
+        )
+        model.fit(X)
+
+
+def test_predict_with_distribution(X):
+    model = MeanRisk()
+    model.fit(X)
+
+    dist = model.prior_estimator_.return_distribution_
+
+    ptf1 = model.predict(X)
+    ptf2 = model.predict(dist)
+    np.testing.assert_almost_equal(ptf1.returns, ptf2.returns)
+    np.testing.assert_array_equal(ptf1.assets, ptf2.assets)
+
+    model.fit(np.array(X))
+    ptf1 = model.predict(np.array(X))
+    ptf2 = model.predict(dist)
+    np.testing.assert_almost_equal(ptf1.returns, ptf2.returns)
+    np.testing.assert_array_equal(ptf1.assets, ptf2.assets)
+
+
+def test_fallback(X):
+    model = MeanRisk()
+    model.fit(X)
+
+    assert hasattr(model, "weights_")
+    assert np.isclose(model.weights_.sum(), 1.0)
+    assert model.fallback_ is None
+    assert model.fallback_chain_ is None
+    assert model.error_ is None
+    assert model.n_features_in_ == 20
+
+    # Force an error by using an impossible constraint configuration
+    model = MeanRisk(min_weights=1.0)
+
+    with pytest.raises(cp.error.SolverError):
+        model.fit(X)
+
+    model = MeanRisk(
+        min_weights=1.0,
+        fallback=MeanRisk(min_weights=0.01),
+    )
+    model.fit(X)
+
+    assert hasattr(model, "weights_")
+    assert np.isclose(model.weights_.sum(), 1.0)
+    assert isinstance(model.fallback_, MeanRisk)
+    assert model.fallback_chain_ == [
+        (
+            "MeanRisk(fallback=MeanRisk(min_weights=0.01), min_weights=1.0)",
+            "Solver 'CLARABEL' failed. Try another solver, or solve with solver_params=dict(verbose=True) for more information",
+        ),
+        ("MeanRisk(min_weights=0.01)", "success"),
+    ]
+    assert model.error_ is None
+    assert model.n_features_in_ == 20
+    np.testing.assert_array_equal(model.feature_names_in_, X.columns)
+    ptf = model.predict(X)
+    assert isinstance(ptf, Portfolio) and not isinstance(ptf, FailedPortfolio)
+    assert ptf.fallback_chain == model.fallback_chain_
+
+
+def test_raise_on_failure(X):
+    # Force an error by using an impossible constraint configuration
+    model = MeanRisk(min_weights=1.0, raise_on_failure=False)
+
+    with pytest.warns(UserWarning):
+        model.fit(X)
+
+    assert hasattr(model, "weights_")
+    assert model.weights_ is None
+    assert model.fallback_ is None
+    assert model.fallback_chain_ is None
+    assert (
+        model.error_
+        == "Solver 'CLARABEL' failed. Try another solver, or solve with solver_params=dict(verbose=True) for more information"
+    )
+    assert model.n_features_in_ == 20
+    np.testing.assert_array_equal(model.feature_names_in_, X.columns)
+    ptf = model.predict(X)
+    assert isinstance(ptf, FailedPortfolio)
+    assert ptf.optimization_error == model.error_
+    assert ptf.fallback_chain == model.fallback_chain_
+
+
+def test_raise_on_failure_multi(X):
+    # Force an error by using an impossible constraint configuration
+    model = MeanRisk(min_return=[0.001, 0.002, 0.003], raise_on_failure=False)
+
+    with pytest.warns(UserWarning):
+        model.fit(X)
+
+    assert model.weights_.shape == (3, 20)
+    assert not np.isnan(model.weights_[0:2]).any()
+    assert np.isnan(model.weights_[2]).all()
+    assert model.error_ == [
+        None,
+        None,
+        "Solver 'CLARABEL' failed with parameters 0.003. Try another solver, or solve with solver_params=dict(verbose=True) for more information",
+    ]
+    assert model.fallback_ is None
+    assert model.fallback_chain_ is None
+    assert model.n_features_in_ == 20
+    np.testing.assert_array_equal(model.feature_names_in_, X.columns)
+
+    pop = model.predict(X)
+    assert isinstance(pop, Population)
+    assert len(pop) == 3
+
+    for i, ptf in enumerate(pop):
+        assert ptf.name == f"ptf{i} - MeanRisk"
+        assert ptf.fallback_chain is None
+        if i < 2:
+            assert isinstance(ptf, Portfolio) and not isinstance(ptf, FailedPortfolio)
+        else:
+            assert isinstance(ptf, FailedPortfolio)
+            assert (
+                ptf.optimization_error
+                == "Solver 'CLARABEL' failed with parameters 0.003. Try another solver, or solve with solver_params=dict(verbose=True) for more information"
+            )
+
+    assert pop.plot_measures(
+        x=RiskMeasure.ANNUALIZED_VARIANCE,
+        y=RiskMeasure.ANNUALIZED_STANDARD_DEVIATION,
+    )
+
+
+def test_raise_on_failure_off_multi_all_fail(X):
+    # Force an error by using an impossible constraint configuration
+    model = MeanRisk(min_return=[0.003, 0.004], raise_on_failure=False)
+
+    with pytest.warns(UserWarning):
+        model.fit(X)
+
+    assert model.weights_ is None
+    assert (
+        model.error_
+        == "All 2 optimizations failed, with last optimization error Solver 'CLARABEL' failed with parameters 0.004. Try another solver, or solve with solver_params=dict(verbose=True) for more information"
+    )
+    assert model.fallback_ is None
+    assert model.fallback_chain_ is None
+    assert model.n_features_in_ == 20
+    np.testing.assert_array_equal(model.feature_names_in_, X.columns)
+
+    ptf = model.predict(X)
+    assert isinstance(ptf, FailedPortfolio)
+    assert ptf.optimization_error == model.error_
+    assert ptf.fallback_chain == model.fallback_chain_
+
+
+def test_raise_on_failure_off_multi_all_fail_fallback(X):
+    # Force an error by using an impossible constraint configuration
+    model = MeanRisk(
+        min_return=[0.003, 0.004], fallback=EqualWeighted(), raise_on_failure=False
+    )
+
+    with pytest.warns(UserWarning):
+        model.fit(X)
+
+    assert model.weights_ is not None
+    assert model.error_ is None
+    assert isinstance(model.fallback_, EqualWeighted)
+    assert model.fallback_chain_ == [
+        (
+            "MeanRisk(fallback=EqualWeighted(), min_return=[0.003, 0.004],\n         raise_on_failure=False)",
+            "All 2 optimizations failed, with last optimization error Solver 'CLARABEL' failed with parameters 0.004. Try another solver, or solve with solver_params=dict(verbose=True) for more information",
+        ),
+        ("EqualWeighted()", "success"),
+    ]
+
+    ptf = model.predict(X)
+    assert isinstance(ptf, Portfolio) and not isinstance(ptf, FailedPortfolio)
+    assert ptf.fallback_chain == model.fallback_chain_
+
+
+def test_raise_on_failure_on_multi_all_fail(X):
+    # Force an error by using an impossible constraint configuration
+    model = MeanRisk(min_return=[0.003, 0.004])
+
+    with pytest.raises(cp.error.SolverError):
+        model.fit(X)
+
+
+def test_fallback_with_raise_on_failure(X):
+    model = MeanRisk(min_weights=1, fallback=MeanRisk(), raise_on_failure=False)
+    model.fit(X)
+
+    assert hasattr(model, "weights_")
+    assert model.weights_ is not None
+    assert isinstance(model.fallback_, MeanRisk)
+    assert model.fallback_chain_ == [
+        (
+            "MeanRisk(fallback=MeanRisk(), min_weights=1, raise_on_failure=False)",
+            "Solver 'CLARABEL' failed. Try another solver, or solve with solver_params=dict(verbose=True) for more information",
+        ),
+        ("MeanRisk()", "success"),
+    ]
+    assert model.error_ is None
+    assert model.n_features_in_ == 20
+    np.testing.assert_array_equal(model.feature_names_in_, X.columns)
+    ptf = model.predict(X)
+    assert isinstance(ptf, Portfolio) and not isinstance(ptf, FailedPortfolio)
+    assert ptf.fallback_chain == model.fallback_chain_
+
+
+def test_target_weights_with_standard_deviation(X):
+    n_assets = X.shape[1]
+    target_weights = np.ones(n_assets) / n_assets
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        target_weights=target_weights,
+        min_weights=0,
+    )
+    model.fit(X)
+
+    np.testing.assert_almost_equal(model.weights_, target_weights)
+
+    weight_diff = model.weights_ - target_weights
+    cov_matrix = np.cov(X.T, ddof=1)
+    manual_tracking_error = np.sqrt(weight_diff @ cov_matrix @ weight_diff)
+
+    np.testing.assert_almost_equal(
+        manual_tracking_error, model.problem_values_["risk"], decimal=5
+    )
+
+
+def test_target_weights_with_standard_deviation_mip(X):
+    n_assets = X.shape[1]
+    target_weights = np.ones(n_assets) / n_assets
+
+    model = MeanRisk(
+        risk_measure=RiskMeasure.VARIANCE,
+        target_weights=target_weights,
+        cardinality=n_assets - 1,
+        solver="SCIP",
+    )
+    model.fit(X)
+
+    assert np.sum(model.weights_ == 0) == 1
+
+    weight_diff = model.weights_ - target_weights
+    cov_matrix = np.cov(X.T, ddof=1)
+    tracking_error = np.sqrt(weight_diff @ cov_matrix @ weight_diff)
+    np.testing.assert_almost_equal(
+        tracking_error, np.sqrt(model.problem_values_["risk"]), decimal=5
+    )
+
+
+@pytest.mark.parametrize("objective_function", list(ObjectiveFunction))
+def test_target_weights_with_multiple_risk_measures(
+    X, risk_measure, objective_function
+):
+    n_assets = X.shape[1]
+    target_weights = np.ones(n_assets) / n_assets
+
+    model = MeanRisk(
+        objective_function=objective_function,
+        risk_measure=risk_measure,
+        target_weights=target_weights,
+    )
+    model.fit(X)
+    if objective_function == ObjectiveFunction.MINIMIZE_RISK:
+        np.testing.assert_almost_equal(model.weights_, target_weights)
+
+
+def test_target_weights_input_formats(X):
+    n_assets = X.shape[1]
+
+    target_weights_array = np.ones(n_assets) / n_assets
+    model1 = MeanRisk(
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        target_weights=target_weights_array,
+        min_weights=0,
+    )
+    portfolio1 = model1.fit(X).predict(X)
+
+    model2 = MeanRisk(
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        target_weights=1 / n_assets,
+        min_weights=0,
+    )
+    portfolio2 = model2.fit(X).predict(X)
+
+    np.testing.assert_almost_equal(portfolio1.weights, portfolio2.weights, decimal=6)
+
+    if isinstance(X, pd.DataFrame):
+        target_weights_dict = {col: 1 / n_assets for col in X.columns[:5]}
+        model3 = MeanRisk(
+            risk_measure=RiskMeasure.STANDARD_DEVIATION,
+            target_weights=target_weights_dict,
+            min_weights=0,
+        )
+        portfolio3 = model3.fit(X).predict(X)
+        assert portfolio3.weights.shape == (n_assets,)
+
+
+def test_target_weights_manual_calculation(X):
+    n_assets = X.shape[1]
+
+    target_weights = np.random.dirichlet(np.ones(n_assets))
+
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MINIMIZE_RISK,
+        risk_measure=RiskMeasure.STANDARD_DEVIATION,
+        target_weights=target_weights,
+        min_weights=0,
+    )
+
+    portfolio = model.fit(X).predict(X)
+
+    # Manual calculation: tracking_error = sqrt((w - target)' Σ (w - target))
+    weight_diff = portfolio.weights - target_weights
+    cov_matrix = np.cov(X.T, ddof=1)
+    manual_tracking_error = np.sqrt(weight_diff @ cov_matrix @ weight_diff)
+
+    np.testing.assert_almost_equal(
+        manual_tracking_error, model.problem_values_["risk"], decimal=5
+    )
+
+
+def _make_online_mean_risk(**kwargs):
+    return MeanRisk(
+        prior_estimator=EmpiricalPrior(
+            mu_estimator=EWMu(half_life=40),
+            covariance_estimator=EWCovariance(half_life=40),
+        ),
+        **kwargs,
+    )
+
+
+class TestPartialFit:
+    def test_produces_valid_weights(self, X):
+        """partial_fit produces weights that sum to the budget."""
+        model = _make_online_mean_risk()
+        model.partial_fit(X)
+
+        assert model.weights_.shape == (X.shape[1],)
+        np.testing.assert_almost_equal(np.sum(model.weights_), 1.0)
+
+    def test_fit_then_partial_fit(self, X):
+        """fit followed by partial_fit updates the model."""
+        X_arr = np.asarray(X)
+        split = len(X_arr) // 2
+
+        model = _make_online_mean_risk()
+        model.fit(X_arr[:split])
+        weights_after_fit = model.weights_.copy()
+
+        model.partial_fit(X_arr[split:])
+        assert not np.array_equal(model.weights_, weights_after_fit)
+
+    def test_default_prior_raises(self, X):
+        """partial_fit raises when prior lacks partial_fit support."""
+        model = MeanRisk()
+        with pytest.raises(TypeError, match="partial_fit"):
+            model.partial_fit(np.asarray(X))
+
+    def test_raise_on_failure_false(self, X):
+        """partial_fit returns FailedPortfolio when solver failure is not raised."""
+        model = _make_online_mean_risk(min_weights=1.0, raise_on_failure=False)
+
+        with pytest.warns(UserWarning, match="Solver 'CLARABEL' failed"):
+            model.partial_fit(X)
+
+        assert model.weights_ is None
+        assert model.problem_values_ is None
+        assert model.fallback_ is None
+        assert model.fallback_chain_ is None
+        assert "Solver 'CLARABEL' failed" in model.error_
+
+        ptf = model.predict(X)
+        assert isinstance(ptf, FailedPortfolio)
+        assert ptf.optimization_error == model.error_
+
+    def test_success_after_raise_on_failure_false_clears_error(self, X):
+        """A later successful partial_fit clears failure diagnostics."""
+        model = _make_online_mean_risk(min_weights=1.0, raise_on_failure=False)
+
+        with pytest.warns(UserWarning, match="Solver 'CLARABEL' failed"):
+            model.partial_fit(X)
+
+        model.set_params(min_weights=0.0)
+        model.partial_fit(X)
+
+        assert model.weights_.shape == (X.shape[1],)
+        assert model.error_ is None
+        assert model.fallback_ is None
+        assert model.fallback_chain_ is None
+
+    def test_fallback_previous_weights(self, X):
+        """partial_fit can fall back to previous weights after solver failure."""
+        previous_weights = np.full(X.shape[1], 1 / X.shape[1])
+        model = _make_online_mean_risk(
+            min_weights=1.0,
+            fallback="previous_weights",
+            previous_weights=previous_weights,
+        )
+
+        model.partial_fit(X)
+
+        np.testing.assert_array_equal(model.weights_, previous_weights)
+        assert model.error_ is None
+        assert model.fallback_ == "previous_weights"
+        assert model.fallback_chain_[-1] == ("previous_weights", "success")
+        assert "Solver 'CLARABEL' failed" in model.fallback_chain_[0][1]
+
+        ptf = model.predict(X)
+        assert isinstance(ptf, Portfolio) and not isinstance(ptf, FailedPortfolio)
+        np.testing.assert_array_equal(ptf.weights, previous_weights)
+        assert ptf.fallback_chain == model.fallback_chain_
+
+    def test_fallback_previous_weights_expands_non_investable_assets(
+        self, nan_investable_test_data, fixed_return_distribution_prior
+    ):
+        """previous_weights fallback stays aligned with the full universe."""
+
+        class OnlineFixedReturnDistributionPrior(fixed_return_distribution_prior):
+            def partial_fit(self, X, y=None):
+                return self.fit(X, y)
+
+        X, mu, covariance, investable_mask = nan_investable_test_data
+        previous_weights = np.array([0.2, 0.3, 0.4, 0.5])
+        model = MeanRisk(
+            min_weights=1.0,
+            fallback="previous_weights",
+            previous_weights=previous_weights,
+            prior_estimator=OnlineFixedReturnDistributionPrior(
+                mu=mu, covariance=covariance
+            ),
+        )
+
+        model.partial_fit(X)
+
+        expected_weights = previous_weights.copy()
+        expected_weights[~investable_mask] = 0.0
+        assert model.weights_.shape == (X.shape[1],)
+        np.testing.assert_array_equal(model.weights_, expected_weights)
+
+        ptf = model.predict(X)
+        assert isinstance(ptf, Portfolio) and not isinstance(ptf, FailedPortfolio)
+        np.testing.assert_array_equal(ptf.weights, expected_weights)
+
+    def test_fallback_previous_weights_failure(self, X):
+        """Failed previous-weights fallback follows raise_on_failure."""
+        model = _make_online_mean_risk(
+            min_weights=1.0,
+            fallback="previous_weights",
+            raise_on_failure=False,
+        )
+
+        with pytest.warns(UserWarning, match="previous_weights.*None"):
+            model.partial_fit(X)
+
+        assert model.weights_ is None
+        assert model.problem_values_ is None
+        assert "previous_weights" in model.error_
+        assert "None" in model.error_
+        assert model.fallback_chain_[-1][0] == "previous_weights"
+
+        ptf = model.predict(X)
+        assert isinstance(ptf, FailedPortfolio)
+        assert ptf.optimization_error == model.error_
+        assert ptf.fallback_chain == model.fallback_chain_
+
+    def test_partial_fit_rejects_estimator_fallback_after_first_call(self, X):
+        """partial_fit validates fallback support on every call."""
+        model = _make_online_mean_risk()
+        model.partial_fit(X)
+        model.set_params(fallback=EqualWeighted())
+
+        with pytest.raises(ValueError, match="fallback='previous_weights'"):
+            model.partial_fit(X)
+
+
+class TestFactorConstraints:
+    """Tests for factor exposure constraints in MeanRisk optimization."""
+
+    @pytest.mark.parametrize(
+        "constraints,factor_indices,check_type,expected",
+        [
+            # Single factor upper bound
+            (
+                ["MTUM <= -0.05"],
+                [0],
+                "less_than",
+                -0.05,
+            ),
+            # Single factor lower bound (binding)
+            (
+                ["MTUM >= 0.9"],
+                [0],
+                "almost_equal",
+                0.9,
+            ),
+            # Single factor equality
+            (
+                ["MTUM == 0"],
+                [0],
+                "almost_equal",
+                0.0,
+            ),
+        ],
+        ids=[
+            "upper_bound",
+            "lower_bound",
+            "equality",
+        ],
+    )
+    def test_single_factor_constraint(
+        self, X, factors, constraints, factor_indices, check_type, expected
+    ):
+        """Test single factor exposure constraints."""
+        model = MeanRisk(
+            prior_estimator=TimeSeriesFactorModel(),
+            linear_constraints=constraints,
+        )
+        model.fit(X, factors=factors)
+
+        weights = model.weights_
+        loading_matrix = (
+            model.prior_estimator_.return_distribution_.factor_model.loading_matrix
+        )
+        exposure = weights @ loading_matrix[:, factor_indices]
+
+        if check_type == "less_than":
+            assert exposure < expected
+        elif check_type == "almost_equal":
+            np.testing.assert_almost_equal(exposure, expected)
+
+    def test_factor_range_constraint(self, X, factors):
+        """Test factor exposure bounded within a range."""
+        model = MeanRisk(
+            prior_estimator=TimeSeriesFactorModel(),
+            linear_constraints=["MTUM <= -0.05", "MTUM >= -0.06"],
+        )
+        model.fit(X, factors=factors)
+
+        weights = model.weights_
+        loading_matrix = (
+            model.prior_estimator_.return_distribution_.factor_model.loading_matrix
+        )
+        exposure = (weights @ loading_matrix[:, [0]]).item()
+
+        assert -0.06 <= exposure <= -0.05
+
+    def test_combined_factors_constraint(self, X, factors):
+        """Test constraint on sum of multiple factor exposures."""
+        model = MeanRisk(
+            prior_estimator=TimeSeriesFactorModel(),
+            linear_constraints=["MTUM + SIZE == 0"],
+        )
+        model.fit(X, factors=factors)
+
+        weights = model.weights_
+        loading_matrix = (
+            model.prior_estimator_.return_distribution_.factor_model.loading_matrix
+        )
+        combined_exposure = (weights @ loading_matrix[:, [0, 2]]).sum()
+
+        np.testing.assert_almost_equal(combined_exposure, 0.0)
+
+    def test_factor_family_constraint(self, X, factors):
+        """Test constraint on a factor family exposure."""
+        factor_families = ["style", "quality", "style", "defensive", "style"]
+        model = MeanRisk(
+            prior_estimator=TimeSeriesFactorModel(factor_families=factor_families),
+            linear_constraints=["style == 0"],
+        )
+        model.fit(X, factors=factors)
+
+        factor_model = model.prior_estimator_.return_distribution_.factor_model
+        style_mask = factor_model.factor_families == "style"
+        family_exposure = (
+            model.weights_ @ factor_model.loading_matrix[:, style_mask]
+        ).sum()
+
+        np.testing.assert_almost_equal(family_exposure, 0.0)
+
+    def test_factor_family_inequality_constraint(self, X, factors):
+        """Test inequality constraint on a factor family exposure."""
+        factor_families = ["style", "quality", "style", "defensive", "style"]
+        model = MeanRisk(
+            prior_estimator=TimeSeriesFactorModel(factor_families=factor_families),
+            linear_constraints=["style <= -0.05"],
+        )
+        model.fit(X, factors=factors)
+
+        factor_model = model.prior_estimator_.return_distribution_.factor_model
+        style_mask = factor_model.factor_families == "style"
+        family_exposure = (
+            model.weights_ @ factor_model.loading_matrix[:, style_mask]
+        ).sum()
+
+        assert family_exposure <= -0.05
+
+
+@pytest.mark.parametrize(
+    "objective", [ObjectiveFunction.MAXIMIZE_RETURN, ObjectiveFunction.MAXIMIZE_RATIO]
+)
+def test_liquidation_cost_with_zero_cost_on_selected_assets(
+    objective, fixed_return_distribution_prior
+):
+    X = pd.DataFrame(
+        np.random.default_rng(0).normal(0, 0.01, (30, 2)), columns=["A", "B"]
+    )
+    mu = np.array([0.02, 0.04])
+    model = MeanRisk(
+        objective_function=objective,
+        prior_estimator=fixed_return_distribution_prior(
+            mu=mu, covariance=np.diag([0.03, 0.04])
+        ),
+        previous_weights={"EXIT": 1.0},
+        transaction_costs={"EXIT": 0.01},
+    ).fit(X)
+    assert model.predict(X).total_cost == pytest.approx(0.01)
+    assert model.problem_values_["expected_return"] == pytest.approx(
+        model.weights_ @ mu - 0.01, abs=1e-7
+    )
+
+
+@pytest.mark.parametrize("named", [False, True])
+@pytest.mark.parametrize("max_turnover", [None, 0.4])
+def test_liquidation_cost_of_non_investable_assets(
+    nan_investable_test_data, fixed_return_distribution_prior, named, max_turnover
+):
+    X, mu, covariance, mask = nan_investable_test_data
+    previous = np.array([0.0, 0.0, 1.0, 0.0])
+    costs = np.array([0.0, 0.0, 0.001, 0.0])
+    if named:
+        previous = dict(zip(X.columns, previous, strict=True))
+        costs = dict(zip(X.columns, costs, strict=True))
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        prior_estimator=fixed_return_distribution_prior(mu=mu, covariance=covariance),
+        previous_weights=previous,
+        transaction_costs=costs,
+        max_turnover=max_turnover,
+    ).fit(X)
+    portfolio = model.predict(X=X)
+    assert portfolio.total_cost == pytest.approx(0.001)
+    assert portfolio.turnover == pytest.approx(2.0)
+    assert model.problem_values_["expected_return"] == pytest.approx(
+        model.weights_[mask] @ mu[mask] - 0.001, abs=1e-7
+    )
+    if max_turnover is not None:
+        assert np.all(np.abs(model.weights_[mask]) <= max_turnover + 1e-7)
+
+
+def test_max_turnover_exempts_forced_liquidations(fixed_return_distribution_prior):
+    X = pd.DataFrame(
+        np.random.default_rng(0).normal(0, 0.01, (60, 3)), columns=list("ABC")
+    )
+    mu = np.array([0.03, 0.02, 0.01])
+    model = MeanRisk(
+        objective_function=ObjectiveFunction.MAXIMIZE_RETURN,
+        prior_estimator=fixed_return_distribution_prior(mu=mu, covariance=np.eye(3)),
+        previous_weights={"EXIT": 1.0},
+        transaction_costs=0.001,
+        max_turnover=0.4,
+    ).fit(X=X)
+    portfolio = model.predict(X=X)
+    np.testing.assert_allclose(model.weights_, [0.4, 0.4, 0.2], atol=1e-7)
+    assert portfolio.turnover == pytest.approx(2.0)
+    assert portfolio.total_cost == pytest.approx(0.002)
+    assert model.problem_values_["expected_return"] == pytest.approx(
+        model.weights_ @ mu - portfolio.total_cost, abs=1e-7
+    )

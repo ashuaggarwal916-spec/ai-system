@@ -1,0 +1,19 @@
+# Core numerics / data
+numpy>=1.24
+pandas>=2.0
+
+# Market data + live execution
+ccxt>=4.2
+
+# Kronos foundation model (torch backbone + HF checkpoint loading)
+torch>=2.1
+huggingface_hub>=0.20
+
+# Config + plotting + tests
+pyyaml>=6.0
+matplotlib>=3.7
+pytest>=7.4
+
+# NOTE: the Kronos model package itself is vendored from
+# https://github.com/shiyu-coder/Kronos (MIT) and must be importable as
+# `model` (i.e. add the Kronos repo to PYTHONPATH or install it in-tree).

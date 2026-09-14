@@ -1,0 +1,48 @@
+[package]
+name = "bibi-execution-engine"
+version = "0.3.0"
+edition = "2021"
+description = "Low-latency execution and order-routing layer for the bibi-desk trading system."
+license = "MIT"
+authors = ["Bibi Quant Desk"]
+keywords = ["trading", "execution", "order-router", "twap", "quant"]
+categories = ["command-line-utilities", "finance"]
+publish = false
+
+# The Python desk (bibi-desk) shells out to this binary. Python writes
+# line-delimited JSON orders on stdin, the engine routes/simulates and writes
+# JSON exec reports back on stdout. See README.md for the protocol.
+[[bin]]
+name = "bibi-exec"
+path = "src/main.rs"
+
+[lib]
+name = "bibi_execution_engine"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+# rayon fans out TWAP child slices when the router decides parallel placement is
+# safe. Optional, off by default.
+rayon = { version = "1.8", optional = true }
+# tokio is only needed for the live venue (async REST/ws). Paper mode is fully
+# synchronous and does not pull it in.
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "time"] }
+
+[features]
+default = []
+parallel = ["dep:rayon"]
+live = ["dep:tokio"]
+
+[dev-dependencies]
+serde_json = "1"
+
+[profile.release]
+# Execution path is latency-sensitive. Optimise hard, single codegen unit.
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"

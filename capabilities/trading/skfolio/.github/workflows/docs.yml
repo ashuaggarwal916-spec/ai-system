@@ -1,0 +1,66 @@
+name: Deploy Documentation
+
+on:
+  workflow_run:
+    workflows: ["Semantic Release"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    # Same reasoning as the release job it chains from: only the canonical repository
+    # publishes the documentation site.
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success'
+          && github.repository == 'skfolio/skfolio' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.gh_pages_deployment.outputs.page_url }}
+    concurrency: release
+    env:
+      UV_PYTHON_DOWNLOADS: never
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # Enable full git history for sitemap last-updated detection
+
+      - name: Setup Python
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Select Python for uv
+        run: echo "UV_PYTHON=${{ steps.python.outputs.python-path }}" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: uv sync --no-dev --group docs
+
+      - name: Build Sphinx Docs
+        working-directory: ./docs
+        run: uv run --no-dev --group docs sphinx-build . _build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Documentation Site Artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/_build
+
+      - name: Deploy Sphinx Docs to GitHub Pages
+        id: gh_pages_deployment
+        uses: actions/deploy-pages@v5

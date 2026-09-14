@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Rust execution engine
+execution-engine/target/
+**/*.rs.bk
+
+# Data + logs + secrets
+data/*.csv
+logs/
+.env
+config.yaml
+
+# OS
+.DS_Store

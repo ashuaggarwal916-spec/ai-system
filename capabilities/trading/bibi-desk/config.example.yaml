@@ -1,0 +1,39 @@
+# Example desk configuration. Copy to config.yaml and edit.
+# Loaded by bibi.config.DeskConfig.from_yaml().
+
+desk:
+  symbols:
+    - BTC/USDT
+    - ETH/USDT
+    - BNB/USDT
+  timeframe: 1h
+  mode: paper          # paper | live
+
+model:
+  name: NeoQuasar/Kronos-small
+  context: 512         # bars of history fed to Kronos
+  pred_len: 24         # bars forecast ahead
+  samples: 30          # Monte Carlo sample paths
+  temperature: 1.0
+  top_p: 0.9
+
+signal:
+  conf_floor: 0.6      # only fire when edge clears conf_floor * sigma
+  fee_bps: 10
+  slippage_bps: 5
+
+sizing:
+  kelly_fraction: 0.5  # half Kelly
+  max_risk_per_trade: 0.01   # 1% of equity at 1R
+  max_gross_exposure: 3.0
+
+risk:
+  atr_period: 14
+  atr_stop_mult: 2.0   # 1R = 2 * ATR
+  take_profit_r: 1.7
+  daily_drawdown_kill: 0.06  # flatten the book past 6% daily loss
+
+execution:
+  engine_bin: bibi-exec     # the rust execution engine on PATH
+  venue: binance
+  max_notional_usd: 25000

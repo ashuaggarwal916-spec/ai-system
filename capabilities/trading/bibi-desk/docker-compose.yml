@@ -1,0 +1,16 @@
+services:
+  desk:
+    build: .
+    container_name: bibi-desk
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BIBI_MODE: paper
+      BIBI_SYMBOLS: "BTC/USDT,ETH/USDT,BNB/USDT"
+      BIBI_TIMEFRAME: "1h"
+      BIBI_MODEL: "NeoQuasar/Kronos-small"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: ["--mode", "paper", "--symbols", "BTC/USDT,ETH/USDT,BNB/USDT", "--timeframe", "1h"]

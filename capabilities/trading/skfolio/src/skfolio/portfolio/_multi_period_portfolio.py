@@ -1,0 +1,1175 @@
+"""Multi Period Portfolio module.
+`MultiPeriodPortfolio` is returned by the `predict` method of Optimization estimators.
+`MultiPeriodPortfolio` is a list of `Portfolio`.
+"""
+
+# Copyright (c) 2023-2026
+# Author: Hugo Delatte <hugo.delatte@skfoliolabs.com>
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
+import numbers
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+import skfolio.typing as skt
+from skfolio.attribution import Attribution
+from skfolio.portfolio._base import BasePortfolio
+from skfolio.portfolio._failed_portfolio import FailedPortfolio
+from skfolio.portfolio._portfolio import (
+    Portfolio,
+    _align_weights,
+    _select_realized_observation_window,
+)
+from skfolio.typing import FloatArray
+from skfolio.utils.tools import deduplicate_names
+
+if TYPE_CHECKING:
+    from skfolio.prior import FactorModel
+
+
+class MultiPeriodPortfolio(BasePortfolio):
+    r"""Multi-Period Portfolio class.
+
+    A Multi-Period Portfolio is composed of a list of :class:`Portfolio`.
+
+    Parameters
+    ----------
+    portfolios : list[Portfolio], optional
+       A list of :class:`Portfolio`. The default (`None`) is to initialize with an
+       empty list.
+
+    name : str, optional
+        Name of the multi-period portfolio.
+        The default (`None`) is to use the object id.
+
+    tag : str, optional
+        Tag given to the multi-period portfolio.
+        Tags are used to manipulate groups of portfolios from a `Population`.
+
+    fitness_measures : list[measures], optional
+        List of fitness measures.
+        Fitness measures are used to compute the portfolio fitness which is used to
+        compute domination.
+        The default (`None`) is to use the list [PerfMeasure.MEAN, RiskMeasure.VARIANCE]
+
+    annualization_factor : float, default=252.0
+        Factor used to annualize the below measures using the square-root rule:
+
+            * Annualized Mean = Mean * factor
+            * Annualized Variance = Variance * factor
+            * Annualized Semi-Variance = Semi-Variance * factor
+            * Annualized Standard-Deviation = Standard-Deviation * sqrt(factor)
+            * Annualized Semi-Deviation = Semi-Deviation * sqrt(factor)
+            * Annualized Sharpe Ratio = Sharpe Ratio * sqrt(factor)
+            * Annualized Sortino Ratio = Sortino Ratio * sqrt(factor)
+
+
+    risk_free_rate : float, default=0.0
+        Risk-free rate. The default value is `0.0`.
+
+    compounded : bool, default=False
+        If this is set to True, cumulative returns are compounded.
+        The default is `False`.
+
+    sample_weight : ndarray of shape (n_observations,), optional
+        Sample weights for each observation. If None, equal weights are assumed.
+
+    min_acceptable_return : float, optional
+        The minimum acceptable return used to distinguish "downside" and "upside"
+        returns for the computation of lower partial moments:
+
+            * First Lower Partial Moment
+            * Semi-Variance
+            * Semi-Deviation
+
+        The default (`None`) is to use the mean.
+
+    value_at_risk_beta : float, default=0.95
+        The confidence level of the portfolio VaR (Value At Risk) which represents
+        the return on the worst (1-beta)% observations.
+        The default value is `0.95`.
+
+    entropic_risk_measure_theta : float, default=1.0
+        The risk aversion level of the portfolio Entropic Risk Measure.
+        The default value is `1.0`.
+
+    entropic_risk_measure_beta : float, default=0.95
+        The confidence level of the portfolio Entropic Risk Measure.
+        The default value is `0.95`.
+
+    cvar_beta : float, default=0.95
+        The confidence level of the portfolio CVaR (Conditional Value at Risk) which
+        represents the expected VaR on the worst (1-beta)% observations.
+        The default value is `0.95`.
+
+    evar_beta : float, default=0.95
+        The confidence level of the portfolio EVaR (Entropic Value at Risk).
+        The default value is `0.95`.
+
+    drawdown_at_risk_beta : float, default=0.95
+        The confidence level of the portfolio Drawdown at Risk (DaR) which represents
+        the drawdown on the worst (1-beta)% observations.
+        The default value is `0.95`.
+
+    cdar_beta : float, default=0.95
+        The confidence level of the portfolio CDaR (Conditional Drawdown at Risk) which
+        represents the expected drawdown on the worst (1-beta)% observations.
+        The default value is `0.95`.
+
+    edar_beta : float, default=0.95
+        The confidence level of the portfolio EDaR (Entropic Drawdown at Risk).
+        The default value is `0.95`.
+
+    check_observations_order : bool, default=False
+        If this is set to True, and if the list of portfolios is not chronologically
+        sorted, an error is raised. The chronological order is determined by comparing
+        the first and last observations of each portfolio.
+        The default is `False`.
+
+    Attributes
+    ----------
+    n_observations : float
+        Number of observations.
+
+    mean : float
+        Mean of the portfolio returns.
+
+    annualized_mean : float
+        Mean annualized by :math:`mean \times annualization\_factor`
+
+    mean_absolute_deviation : float
+        Mean Absolute Deviation. The deviation is the difference between the
+        return and a minimum acceptable return (`min_acceptable_return`).
+
+    first_lower_partial_moment : float
+        First Lower Partial Moment. The First Lower Partial Moment is the mean of the
+        returns below a minimum acceptable return (`min_acceptable_return`).
+
+    variance : float
+        Variance (Second Moment)
+
+    annualized_variance : float
+        Variance annualized by :math:`variance \times annualization\_factor`
+
+    semi_variance : float
+        Semi-variance (Second Lower Partial Moment).
+        The semi-variance is the variance of the returns below a minimum acceptable
+        return (`min_acceptable_return`).
+
+    annualized_semi_variance : float
+        Semi-variance annualized by
+        :math:`semi\_variance \times annualization\_factor`
+
+    standard_deviation : float
+        Standard Deviation (Square Root of the Second Moment).
+
+    annualized_standard_deviation : float
+        Standard Deviation annualized by
+        :math:`standard\_deviation \times \sqrt{annualization\_factor}`
+
+    semi_deviation : float
+        Semi-deviation (Square Root of the Second Lower Partial Moment).
+        The Semi Standard Deviation is the Standard Deviation of the returns below a
+        minimum acceptable return (`min_acceptable_return`).
+
+    annualized_semi_deviation : float
+        Semi-deviation annualized by
+        :math:`semi\_deviation \times \sqrt{annualization\_factor}`
+
+    skew : float
+        Skew. The Skew is a measure of the lopsidedness of the distribution.
+        A symmetric distribution have a Skew of zero.
+        Higher Skew corresponds to longer right tail.
+
+    kurtosis : float
+        Kurtosis. It is a measure of the heaviness of the tail of the distribution.
+        Higher Kurtosis corresponds to greater extremity of deviations (fat tails).
+
+    fourth_central_moment : float
+       Fourth Central Moment.
+
+    fourth_lower_partial_moment : float
+        Fourth Lower Partial Moment. It is a measure of the heaviness of the downside
+        tail of the returns below a minimum acceptable return (`min_acceptable_return`).
+        Higher Fourth Lower Partial Moment corresponds to greater extremity of downside
+        deviations (downside fat tail).
+
+    worst_realization : float
+        Worst Realization which is the worst return.
+
+    value_at_risk : float
+        Historical VaR (Value at Risk).
+        The VaR is the maximum loss at a given confidence level (`value_at_risk_beta`).
+
+    cvar : float
+        Historical CVaR (Conditional Value at Risk). The CVaR (or Tail VaR) represents
+        the mean shortfall at a specified confidence level (`cvar_beta`).
+
+    entropic_risk_measure : float
+        Historical Entropic Risk Measure. It is a risk measure which depends on the
+        risk aversion defined by the investor (`entropic_risk_measure_theta`) through
+        the exponential utility function at a given confidence level
+        (`entropic_risk_measure_beta`).
+
+    evar : float
+         Historical EVaR (Entropic Value at Risk). It is a coherent risk measure which
+         is an upper bound for the VaR and the CVaR, obtained from the Chernoff
+         inequality at a given confidence level (`evar_beta`). The EVaR can be
+         represented by using the concept of relative entropy.
+
+    drawdown_at_risk : float
+        Historical Drawdown at Risk. It is the maximum drawdown at a given
+        confidence level (`drawdown_at_risk_beta`).
+
+    cdar : float
+        Historical CDaR (Conditional Drawdown at Risk) at a given confidence level
+        (`cdar_beta`).
+
+    max_drawdown : float
+        Maximum Drawdown.
+
+    average_drawdown : float
+        Average Drawdown.
+
+    edar : float
+        EDaR (Entropic Drawdown at Risk). It is a coherent risk measure which is an
+        upper bound for the Drawdown at Risk and the CDaR, obtained from the Chernoff
+        inequality at a given confidence level (`edar_beta`). The EDaR can be
+        represented by using the concept of relative entropy.
+
+    ulcer_index : float
+        Ulcer Index
+
+    gini_mean_difference : float
+        Gini Mean Difference (GMD). It is the expected absolute difference between two
+        realizations. The GMD is a superior measure of variability  for non-normal
+        distribution than the variance. It can be used to form necessary conditions
+        for second-degree stochastic dominance, while the variance cannot.
+
+    mean_absolute_deviation_ratio : float
+        Mean Absolute Deviation ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the MaD.
+
+    first_lower_partial_moment_ratio : float
+        First Lower Partial Moment ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the First Lower
+        Partial Moment.
+
+    sharpe_ratio : float
+        Sharpe ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the standard-deviation.
+
+    annualized_sharpe_ratio : float
+        Sharpe ratio annualized by
+        :math:`sharpe\_ratio \times \sqrt{annualization\_factor}`.
+
+    sortino_ratio : float
+        Sortino ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the semi
+        standard-deviation.
+
+    annualized_sortino_ratio : float
+        Sortino ratio annualized by
+        :math:`sortino\_ratio \times \sqrt{annualization\_factor}`.
+
+    value_at_risk_ratio : float
+        VaR ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Value at Risk
+        (VaR).
+
+    cvar_ratio : float
+        CVaR ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Conditional Value
+        at Risk (CVaR).
+
+    entropic_risk_measure_ratio : float
+        Entropic risk measure ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Entropic risk
+        measure.
+
+    evar_ratio : float
+        EVaR ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the EVaR (Entropic
+        Value at Risk).
+
+    worst_realization_ratio : float
+        Worst Realization ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Worst Realization
+        (worst return).
+
+    drawdown_at_risk_ratio : float
+        Drawdown at Risk ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the drawdown at
+        risk.
+
+    cdar_ratio : float
+        CDaR ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the CDaR (conditional
+        drawdown at risk).
+
+    calmar_ratio : float
+        Calmar ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Maximum Drawdown.
+
+    average_drawdown_ratio : float
+        Average Drawdown ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Average Drawdown.
+
+    edar_ratio : float
+        EDaR ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the EDaR (Entropic
+        Drawdown at Risk).
+
+    ulcer_index_ratio : float
+        Ulcer Index ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Ulcer Index.
+
+    gini_mean_difference_ratio : float
+        Gini Mean Difference ratio.
+        It is the excess mean (mean - risk_free_rate) divided by the Gini Mean
+        Difference.
+    """
+
+    __slots__ = {
+        # read-only
+        "_portfolios",
+        "check_observations_order",
+    }
+
+    def __init__(
+        self,
+        portfolios: list[Portfolio] | None = None,
+        name: str | None = None,
+        tag: str | None = None,
+        risk_free_rate: float = 0,
+        annualization_factor: float | None = None,
+        fitness_measures: list[skt.Measure] | None = None,
+        compounded: bool = False,
+        sample_weight: FloatArray | None = None,
+        min_acceptable_return: float | None = None,
+        value_at_risk_beta: float = 0.95,
+        entropic_risk_measure_theta: float = 1,
+        entropic_risk_measure_beta: float = 0.95,
+        cvar_beta: float = 0.95,
+        evar_beta: float = 0.95,
+        drawdown_at_risk_beta: float = 0.95,
+        cdar_beta: float = 0.95,
+        edar_beta: float = 0.95,
+        check_observations_order: bool = False,
+        **kwargs,
+    ):
+        super().__init__(
+            returns=np.array([]),
+            observations=np.array([]),
+            name=name,
+            tag=tag,
+            risk_free_rate=risk_free_rate,
+            annualization_factor=annualization_factor,
+            fitness_measures=fitness_measures,
+            compounded=compounded,
+            sample_weight=sample_weight,
+            min_acceptable_return=min_acceptable_return,
+            value_at_risk_beta=value_at_risk_beta,
+            cvar_beta=cvar_beta,
+            entropic_risk_measure_theta=entropic_risk_measure_theta,
+            entropic_risk_measure_beta=entropic_risk_measure_beta,
+            evar_beta=evar_beta,
+            drawdown_at_risk_beta=drawdown_at_risk_beta,
+            cdar_beta=cdar_beta,
+            edar_beta=edar_beta,
+            **kwargs,
+        )
+        self.check_observations_order = check_observations_order
+        self._set_portfolios(portfolios=portfolios)
+
+    def __len__(self) -> int:
+        return len(self.portfolios)
+
+    def __getitem__(self, key: int | slice) -> Portfolio | list[Portfolio]:
+        return self._portfolios[key]
+
+    def __setitem__(self, key: int, value: Portfolio) -> None:
+        if not isinstance(value, Portfolio):
+            raise TypeError(f"Cannot set a value with type {type(value)}")
+        new_portfolios = self._portfolios.copy()
+        new_portfolios[key] = value
+        self._set_portfolios(portfolios=new_portfolios)
+        self.clear()
+
+    def __delitem__(self, key: int) -> None:
+        new_portfolios = self._portfolios.copy()
+        del new_portfolios[key]
+        self._set_portfolios(portfolios=new_portfolios)
+        self.clear()
+
+    def __iter__(self) -> Iterator[Portfolio]:
+        return iter(self._portfolios)
+
+    def __contains__(self, value: Portfolio) -> bool:
+        if not isinstance(value, Portfolio):
+            return False
+        return value in self._portfolios
+
+    def __neg__(self):
+        return self.__class__(
+            portfolios=[-p for p in self],
+            tag=self.tag,
+            fitness_measures=self.fitness_measures,
+        )
+
+    def __abs__(self):
+        return self.__class__(
+            portfolios=[abs(p) for p in self],
+            tag=self.tag,
+            fitness_measures=self.fitness_measures,
+        )
+
+    def __round__(self, n: int):
+        return self.__class__(
+            portfolios=[p.__round__(n) for p in self],
+            tag=self.tag,
+            fitness_measures=self.fitness_measures,
+        )
+
+    def __floor__(self):
+        return self.__class__(
+            portfolios=[np.floor(p) for p in self],
+            tag=self.tag,
+            fitness_measures=self.fitness_measures,
+        )
+
+    def __trunc__(self):
+        return self.__class__(
+            portfolios=[np.trunc(p) for p in self],
+            tag=self.tag,
+            fitness_measures=self.fitness_measures,
+        )
+
+    def __add__(self, other):
+        if not isinstance(other, self.__class__):
+            raise TypeError(
+                "Cannot add a MultiPeriodPortfolio with an object of type"
+                f" {type(other)}"
+            )
+        if len(self) != len(other):
+            raise TypeError("Cannot add two MultiPeriodPortfolio of different sizes")
+        return self.__class__(
+            portfolios=[p1 + p2 for p1, p2 in zip(self, other, strict=True)],
+            tag=self.tag,
+            fitness_measures=self.fitness_measures,
+        )
+
+    def __sub__(self, other):
+        if not isinstance(other, self.__class__):
+            raise TypeError(
+                "Cannot subtract a MultiPeriodPortfolio with an object of type"
+                f" {type(other)}"
+            )
+        if len(self) != len(other):
+            raise TypeError(
+                "Cannot subtract two MultiPeriodPortfolio of different sizes"
+            )
+        return self.__class__(
+            portfolios=[p1 - p2 for p1, p2 in zip(self, other, strict=True)],
+            tag=self.tag,
+            fitness_measures=self.fitness_measures,
+        )
+
+    def __mul__(self, other: numbers.Number | list[numbers.Number] | FloatArray):
+        if np.isscalar(other):
+            portfolios = [p * other for p in self]
+        else:
+            portfolios = [p * a for p, a in zip(self, other, strict=True)]
+        return self.__class__(
+            portfolios=portfolios, tag=self.tag, fitness_measures=self.fitness_measures
+        )
+
+    __rmul__ = __mul__
+
+    def __floordiv__(self, other: numbers.Number | list[numbers.Number] | FloatArray):
+        if np.isscalar(other):
+            portfolios = [p // other for p in self]
+        else:
+            portfolios = [p // a for p, a in zip(self, other, strict=True)]
+        return self.__class__(
+            portfolios=portfolios, tag=self.tag, fitness_measures=self.fitness_measures
+        )
+
+    def __truediv__(self, other: numbers.Number | list[numbers.Number] | FloatArray):
+        if np.isscalar(other):
+            portfolios = [p / other for p in self]
+        else:
+            portfolios = [p / a for p, a in zip(self, other, strict=True)]
+        return self.__class__(
+            portfolios=portfolios, tag=self.tag, fitness_measures=self.fitness_measures
+        )
+
+    # Private method
+    def _set_portfolios(self, portfolios: list[Portfolio] | None = None) -> None:
+        """Set the returns, observations and portfolios list.
+
+        Parameters
+        ----------
+        portfolios : list[Portfolio], optional
+            The list of Portfolios. The default (`None`) is to use an empty list.
+        """
+        returns = []
+        observations = []
+        if portfolios is None:
+            portfolios = []
+        if len(portfolios) != 0:
+            for item in portfolios:
+                if not isinstance(item, BasePortfolio | Portfolio):
+                    raise TypeError(
+                        "`portfolios` items must be of type `Portfolio`, got"
+                        f" {type(item).__name__}"
+                    )
+                returns.append(item.returns)
+                observations.append(item.observations)
+            returns = np.concatenate(returns)
+            observations = np.concatenate(observations)
+            if self.check_observations_order:
+                iteration = iter(portfolios)
+                prev_p = next(iteration)
+                while (p := next(iteration, None)) is not None:
+                    if p.observations[0] <= prev_p.observations[-1]:
+                        raise ValueError(
+                            "Portfolios observations should not overlap:"
+                            f" {p} overlapping {prev_p}"
+                        )
+                    prev_p = p
+        self._loaded = False
+        self._portfolios = portfolios
+        self.returns = np.asarray(returns)
+        self.observations = np.asarray(observations)
+        self._loaded = True
+
+    # Custom attribute setter and getter
+    @property
+    def portfolios(self) -> list[Portfolio]:
+        """List of portfolios composing the mutli-period portfolio."""
+        return self._portfolios
+
+    @portfolios.setter
+    def portfolios(self, value: list[Portfolio] | None = None):
+        """Set the list of Portfolios and clear the attributes cache linked to the
+        list of portfolios.
+        """
+        self._set_portfolios(portfolios=value)
+        self.clear()
+
+    # Classic property
+    @property
+    def failed_portfolios(self) -> list[FailedPortfolio]:
+        """Return the list of `FailedPortfolio` in the multi-period portfolio."""
+        return [x for x in self if isinstance(x, FailedPortfolio)]
+
+    @property
+    def fallback_portfolios(self) -> list[Portfolio]:
+        """
+        Return the list of portfolios in the multi-period portfolio that used a
+        fallback (i.e., have a non-None `fallback_chain`). This includes
+        `FailedPortfolio` instances when fallbacks were attempted.
+        """
+        return [x for x in self if getattr(x, "fallback_chain", None) is not None]
+
+    @property
+    def n_failed_portfolios(self) -> int:
+        """Number of `FailedPortfolio` in the multi-period portfolio."""
+        return len(self.failed_portfolios)
+
+    @property
+    def n_fallback_portfolios(self) -> int:
+        """Number of portfolios in the multi-period portfolio with a fallback."""
+        return len(self.fallback_portfolios)
+
+    @property
+    def assets(self) -> list:
+        """List of assets names in each Portfolio."""
+        return [p.assets for p in self]
+
+    @property
+    def composition(self) -> pd.DataFrame:
+        """DataFrame of the Portfolio composition."""
+        df = pd.concat([p.composition for p in self], axis=1)
+        df.columns = deduplicate_names(df.columns)
+        # Leave columns of only NaNs untouched
+        mask = ~df.isna().all(axis=0)
+        df.loc[:, mask] = df.loc[:, mask].fillna(0)
+        return df
+
+    @property
+    def weights_dict(self) -> dict[str, dict[str, float]]:
+        """Dictionary mapping each Portfolio name to its asset weight allocation."""
+        names = deduplicate_names([ptf.name for ptf in self.portfolios])
+        return {
+            name: ptf.weights_dict
+            for name, ptf in zip(names, self.portfolios, strict=True)
+        }
+
+    @property
+    def previous_weights_dict(self) -> dict[str, dict[str, float]]:
+        """Dictionary mapping Portfolio name to its previous asset weight allocation."""
+        names = deduplicate_names([ptf.name for ptf in self.portfolios])
+        return {
+            name: ptf.previous_weights_dict
+            for name, ptf in zip(names, self.portfolios, strict=True)
+        }
+
+    @property
+    def ending_weights_dict(self) -> dict[str, dict[str, float]]:
+        """Map each Portfolio name to its weights at the end of its observation window.
+
+        For each Portfolio, the nested dictionary contains its `ending_weights_dict`,
+        as determined by that Portfolio's `weight_drift` setting. Failed portfolios map
+        every asset to NaN. In a sequential evaluation, the next optimization uses the
+        last successful ending weights as `previous_weights`.
+        """
+        names = deduplicate_names([ptf.name for ptf in self.portfolios])
+        return {
+            name: ptf.ending_weights_dict
+            for name, ptf in zip(names, self.portfolios, strict=True)
+        }
+
+    @property
+    def turnover(self) -> pd.Series:
+        """Turnover of each Portfolio, indexed by its first observation.
+
+        In a sequentially evaluated path, `previous_weights` come from the last
+        successful Portfolio. With `weight_drift=False`, they are its target weights,
+        so each value measures target turnover. With `weight_drift=True`, they include
+        the intervening drift, so each value measures executed turnover. Failed
+        portfolios have a NaN value. Empty portfolios are omitted because they have
+        no observation to use as a rebalancing date.
+        """
+        portfolios = [p for p in self.portfolios if p.n_observations]
+        return pd.Series(
+            data=[portfolio.turnover for portfolio in portfolios],
+            index=[portfolio.observations[0] for portfolio in portfolios],
+            name="turnover",
+            dtype=float,
+        )
+
+    @property
+    def weights_per_observation(self) -> pd.DataFrame:
+        """DataFrame of the Portfolio weights per observation."""
+        return (
+            pd.concat([p.weights_per_observation for p in self], axis=0)
+            .fillna(0)
+            .sort_index()
+        )
+
+    @property
+    def long_short_exposure(self) -> pd.DataFrame:
+        """DataFrame of long, short, net and gross exposure per observation.
+
+        The long exposure is the sum of positive weights. The short exposure is the
+        sum of negative weights. Net exposure is the sum of all weights and gross
+        exposure is the sum of absolute weights.
+        """
+        weights = pd.concat(
+            [p.weights_per_observation for p in self],
+            axis=0,
+        ).sort_index()
+        failed_rows = weights.isna().all(axis=1)
+        weights = weights.fillna(0)
+        return pd.DataFrame(
+            {
+                "Long": weights.clip(lower=0).sum(axis=1),
+                "Short": weights.clip(upper=0).sum(axis=1),
+                "Net": weights.sum(axis=1),
+                "Gross": weights.abs().sum(axis=1),
+            },
+            index=weights.index,
+        ).mask(failed_rows)
+
+    def contribution(
+        self, measure: skt.Measure, spacing: float | None = None, to_df: bool = True
+    ) -> FloatArray | pd.DataFrame:
+        r"""Compute the contribution of each asset to a given measure for each
+        portfolio.
+
+        Parameters
+        ----------
+        measure : Measure
+            The measure used for the contribution computation.
+
+        spacing : float, optional
+            Spacing "h" of the finite difference:
+            :math:`contribution(wi)= \frac{measure(wi-h) - measure(wi+h)}{2h}`
+
+        to_df : bool, default=False
+            If this is set to True, a DataFrame with asset names in index and portfolio
+            names in columns is returned, otherwise a list of numpy array is returned.
+            When a DataFrame is returned, the assets with zero weights are removed.
+
+        Returns
+        -------
+        values : list of numpy array of shape (n_assets,) for each portfolio or a DataFrame
+            The measure contribution of each asset for each portfolio.
+        """
+        contributions = [
+            ptf.contribution(measure=measure, spacing=spacing, to_df=to_df)
+            for ptf in self
+        ]
+        if not to_df:
+            return contributions
+        df = pd.concat(contributions, axis=1)
+        df.columns = deduplicate_names(df.columns)
+        # Leave columns of only NaNs untouched
+        mask = ~df.isna().all(axis=0)
+        df.loc[:, mask] = df.loc[:, mask].fillna(0)
+        return df
+
+    def summary(self, formatted: bool = True) -> pd.Series:
+        """Portfolio summary of all its measures.
+
+        Parameters
+        ----------
+        formatted : bool, default=True
+            If this is set to True, the measures are formatted into rounded string with
+            units.
+
+        Returns
+        -------
+        summary : series
+            Portfolio summary of all its measures.
+        """
+        df = super().summary(formatted=formatted)
+        avg_assets_per_portfolio = np.mean([p.n_assets for p in self])
+        n_portfolios = len(self)
+        n_failed_portfolios = self.n_failed_portfolios
+        n_fallback_portfolios = self.n_fallback_portfolios
+
+        if formatted:
+            avg_assets_per_portfolio = f"{avg_assets_per_portfolio:0.1f}"
+            n_portfolios = str(int(n_portfolios))
+            n_failed_portfolios = str(n_failed_portfolios)
+            n_fallback_portfolios = str(n_fallback_portfolios)
+
+        df["Avg nb of Assets per Portfolio"] = avg_assets_per_portfolio
+        df["Number of Portfolios"] = n_portfolios
+        df["Number of Failed Portfolios"] = n_failed_portfolios
+        df["Number of Fallback Portfolios"] = n_fallback_portfolios
+
+        return df
+
+    # Public methods
+    def append(self, portfolio: Portfolio) -> None:
+        """Append a Portfolio to the Portfolio list.
+
+        Parameters
+        ----------
+        portfolio : Portfolio
+            The Portfolio to append.
+        """
+        if self.check_observations_order and len(self) != 0:
+            start_date = portfolio.observations[0]
+            prev_last_date = self[-1].observations[-1]
+            if start_date < prev_last_date:
+                raise ValueError(
+                    f"Portfolios observations should not overlap: {prev_last_date} ->"
+                    f" {start_date} "
+                )
+        self._loaded = False
+        self._portfolios.append(portfolio)
+        if len(self.observations) == 0:
+            # We don't concatenate an empty array as we cannot know the dtype before.
+            self.observations = portfolio.observations
+            self.returns = portfolio.returns
+        else:
+            self.observations = np.concatenate(
+                [self.observations, portfolio.observations], axis=0
+            )
+            self.returns = np.concatenate([self.returns, portfolio.returns], axis=0)
+        self._loaded = True
+        self.clear()
+
+    def plot_weights_per_observation(self):
+        """Plot portfolio weights per observation as a stacked-area chart.
+
+        This shows the composition of the portfolio over time, with each asset's weight
+        stacked to illustrate how allocations shift.
+
+        Returns
+        -------
+        plot : Figure
+            Returns the plot Figure object.
+        """
+        df = self.weights_per_observation
+
+        fig = go.Figure()
+
+        for asset in df.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=df[asset],
+                    mode="lines",
+                    name=asset,
+                    stackgroup="one",  # stack all series
+                    line=dict(width=0.5),
+                    hovertemplate=(
+                        "%{x|%Y-%m-%d}<br>"  # date
+                        f"{asset}: "  # asset name
+                        "%{y:.2%}"  # two-decimals percent
+                        "<extra></extra>"
+                    ),
+                )
+            )
+        fig.update_layout(
+            title="Weight allocation over time",
+            xaxis_title="Date",
+            yaxis_title="Weight (%)",
+            legend_title_text="Assets",
+        )
+
+        fig.update_yaxes(
+            tickformat=".0%",
+            zeroline=True,
+            zerolinecolor="gray",
+        )
+
+        return fig
+
+    def plot_long_short_exposure(self) -> go.Figure:
+        """Plot long, short, net and gross exposure per observation.
+
+        Returns
+        -------
+        plot : Figure
+            Returns the plot Figure object.
+        """
+        df = self.long_short_exposure
+
+        styles = {
+            "Long": {"fill": "tozeroy", "opacity": 0.4, "line": {"width": 1}},
+            "Short": {"fill": "tozeroy", "opacity": 0.4, "line": {"width": 1}},
+            "Net": {"line": {"width": 2}},
+            "Gross": {"line": {"width": 1.25, "dash": "dash"}},
+        }
+
+        fig = go.Figure()
+        for name, style in styles.items():
+            fig.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=df[name],
+                    name=name,
+                    mode="lines",
+                    fill=style.get("fill"),
+                    opacity=style.get("opacity", 1),
+                    line=style["line"],
+                    hovertemplate=(
+                        f"%{{x|%Y-%m-%d}}<br>{name}: %{{y:.2%}}<extra></extra>"
+                    ),
+                )
+            )
+
+        fig.update_layout(
+            title="Long/Short Exposure Over Time",
+            xaxis_title="Date",
+            yaxis_title="Exposure (%)",
+            legend_title_text="Exposure",
+        )
+        fig.update_yaxes(
+            tickformat=".0%",
+            zeroline=True,
+            zerolinecolor="gray",
+        )
+
+        return fig
+
+    def predicted_attribution(
+        self,
+        factor_model: FactorModel,
+        compute_asset_breakdowns: bool = True,
+    ) -> Attribution:
+        r"""Ex-ante (predicted) factor attribution for the last portfolio.
+
+        Returns the predicted attribution for the most recent (last) portfolio in the
+        walk-forward sequence, which represents the current allocation.
+
+        The last portfolio's weights are aligned to `factor_model.asset_names`: assets
+        not in the portfolio receive zero weight, and assets not in the factor model
+        raise an error.
+
+        Predicted attribution uses the factor model's latest forecast estimates
+        (`loading_matrix`, `factor_covariance`, `idio_covariance`, `factor_mu`,
+        `idio_mu`), so no observation alignment is performed.
+
+        The annualization scaling uses `self.annualization_factor`.
+
+        See :func:`~skfolio.attribution.predicted_factor_attribution`
+        for the full mathematical description.
+
+        Parameters
+        ----------
+        factor_model : FactorModel
+            Factor model whose latest forecast estimates are used. Every asset
+            held by the last portfolio must appear in `factor_model.asset_names`.
+
+        compute_asset_breakdowns : bool, default=True
+            If `True`, compute per-asset systematic/idiosyncratic decomposition. Set to
+            `False` for faster computation when only portfolio-level results are needed.
+
+        Returns
+        -------
+        attribution : Attribution
+            Component-level, factor-level, and optionally asset-level attribution
+            results for the last portfolio.
+
+        Raises
+        ------
+        ValueError
+            If the multi-period portfolio is empty, the last portfolio is a
+            :class:`FailedPortfolio`, or it holds assets not covered by the factor model.
+        """
+        if len(self) == 0:
+            raise ValueError(
+                "Cannot compute attribution on an empty MultiPeriodPortfolio."
+            )
+        last_portfolio = self[-1]
+        if isinstance(last_portfolio, FailedPortfolio):
+            raise ValueError(
+                "Cannot compute predicted attribution: the last portfolio "
+                "is a FailedPortfolio."
+            )
+        aligned_weights = _align_weights(
+            last_portfolio.weights, last_portfolio.assets, factor_model.asset_names
+        )
+        return factor_model.predicted_attribution(
+            weights=aligned_weights,
+            annualization_factor=self.annualization_factor,
+            compute_asset_breakdowns=compute_asset_breakdowns,
+        )
+
+    def realized_attribution(
+        self,
+        factor_model: FactorModel,
+        compute_asset_breakdowns: bool = True,
+        compute_uncertainty: bool = True,
+    ) -> Attribution:
+        r"""Realized (ex-post) factor attribution aggregated over all periods.
+
+        Builds a time-varying weight matrix from the non-failed child portfolios and
+        computes a single realized attribution over the full walk-forward observation
+        window.
+
+        Each child portfolio's static weight vector is broadcast across its
+        observations. Failed portfolios are skipped (their observations and returns are
+        excluded).
+
+        Weights are aligned to `factor_model.asset_names`: assets not in a given
+        portfolio receive zero weight, and assets not in the factor model raise an
+        error.
+
+        Realized attribution is computed on the overlapping observation window between
+        the multi-period portfolio and the factor model. Portfolio observations outside
+        the factor model window, commonly caused by factor-model warmup or exposure lag,
+        are excluded. Missing portfolio observations inside the overlapping window raise
+        `ValueError`. Time-varying exposures follow the as-of indexing convention
+        described in
+        :func:`~skfolio.attribution.realized_factor_attribution`:
+        when `exposure_lag > 0`, exposures known at observation :math:`t-\ell` are
+        aligned with returns at observation :math:`t`.
+
+        The annualization scaling uses `self.annualization_factor`.
+
+        See :func:`~skfolio.attribution.realized_factor_attribution` for
+        the full mathematical description.
+
+        Parameters
+        ----------
+        factor_model : FactorModel
+            Factor model containing time-varying fields (`factor_returns`, `exposures`,
+            `idio_returns`) that overlap with the observation periods of non-failed
+            child portfolios. Every asset held by any child portfolio must appear in
+            `factor_model.asset_names`.
+
+        compute_asset_breakdowns : bool, default=True
+            If `True`, compute per-asset systematic/idiosyncratic attribution. Set to
+            `False` for faster computation when only portfolio-level results are needed.
+
+        compute_uncertainty : bool, default=True
+            If `True`, compute attribution uncertainty (standard errors on the factor
+            and idiosyncratic mean-return split).
+
+        Returns
+        -------
+        attribution : Attribution
+            Component-level, factor-level, and optionally asset-level attribution
+            results aggregated over all non-failed periods.
+
+        Raises
+        ------
+        ValueError
+            If the multi-period portfolio is empty, all child portfolios are failed, any
+            child portfolio holds assets not covered by the factor model, no portfolio
+            observations overlap with the factor model, or portfolio observations are
+            missing inside the overlapping window.
+        """
+        portfolio_returns, weights_per_observation, aligned_factor_model = (
+            _prepare_multi_period_realized_attribution_inputs(self, factor_model)
+        )
+        return aligned_factor_model.realized_attribution(
+            weights=weights_per_observation,
+            portfolio_returns=portfolio_returns,
+            annualization_factor=self.annualization_factor,
+            compute_asset_breakdowns=compute_asset_breakdowns,
+            compute_uncertainty=compute_uncertainty,
+        )
+
+    def rolling_realized_attribution(
+        self,
+        factor_model: FactorModel,
+        window_size: int = 60,
+        step: int = 21,
+        compute_asset_breakdowns: bool = True,
+        compute_asset_factor_contribs: bool = False,
+        compute_uncertainty: bool = True,
+    ) -> Attribution:
+        r"""Rolling realized (ex-post) factor attribution over all periods.
+
+        Builds a time-varying weight matrix from the non-failed child portfolios and
+        computes rolling realized attribution over the full walk-forward observation
+        window.
+
+        Each child portfolio's static weight vector is broadcast across its
+        observations. Failed portfolios are skipped.
+
+        Rolling realized attribution is computed on the overlapping observation window
+        between the multi-period portfolio and the factor model. Portfolio observations
+        outside the factor model window, commonly caused by factor-model warmup or
+        exposure lag, are excluded. Missing portfolio observations inside the
+        overlapping window raise `ValueError`. Time-varying exposures follow the as-of
+        indexing convention described in
+        :func:`~skfolio.attribution.rolling_realized_factor_attribution`.
+
+        See :func:`~skfolio.attribution.rolling_realized_factor_attribution`
+        for the full mathematical description.
+
+        Parameters
+        ----------
+        factor_model : FactorModel
+            Factor model containing time-varying fields that overlap with the
+            observation periods of non-failed child portfolios.
+
+        window_size : int, default=60
+            Number of effective return periods in each rolling window.
+
+        step : int, default=21
+            Number of observations to advance between consecutive windows. The default
+            of 21 produces approximately monthly output for daily data.
+
+        compute_asset_breakdowns : bool, default=True
+            If `True`, compute per-asset attribution for each window.
+
+        compute_asset_factor_contribs : bool, default=False
+            If `True`, compute asset-factor matrix for each window.
+
+        compute_uncertainty : bool, default=True
+            If `True`, compute per-window attribution uncertainty.
+
+        Returns
+        -------
+        attribution : Attribution
+            Rolling attribution results with an additional leading dimension for the
+            number of windows.
+
+        Raises
+        ------
+        ValueError
+            If the multi-period portfolio is empty, all child portfolios are failed, any
+            child portfolio holds assets not covered by the factor model, no portfolio
+            observations overlap with the factor model, or `window_size` exceeds the
+            number of overlapping observations.
+        """
+        portfolio_returns, weights_per_observation, aligned_factor_model = (
+            _prepare_multi_period_realized_attribution_inputs(self, factor_model)
+        )
+        return aligned_factor_model.rolling_realized_attribution(
+            weights=weights_per_observation,
+            portfolio_returns=portfolio_returns,
+            annualization_factor=self.annualization_factor,
+            window_size=window_size,
+            step=step,
+            compute_asset_breakdowns=compute_asset_breakdowns,
+            compute_asset_factor_contribs=compute_asset_factor_contribs,
+            compute_uncertainty=compute_uncertainty,
+        )
+
+
+def _prepare_multi_period_realized_attribution_inputs(
+    multi_period_portfolio: MultiPeriodPortfolio,
+    factor_model: FactorModel,
+) -> tuple[np.ndarray, np.ndarray, FactorModel]:
+    """Build time-varying weights and restrict observations for realized attribution.
+
+    Parameters
+    ----------
+    multi_period_portfolio : MultiPeriodPortfolio
+        The multi-period portfolio whose children are assembled.
+
+    factor_model : FactorModel
+        Factor model to restrict.
+
+    Returns
+    -------
+    portfolio_returns : ndarray of shape (n_obs,)
+        Concatenated returns from non-failed child portfolios, restricted to
+        the overlapping factor model window.
+
+    weights_per_observation : ndarray of shape (n_obs, n_model_assets)
+        Time-varying weight matrix restricted to the overlapping factor model window.
+
+    aligned_factor_model : FactorModel
+        Factor model restricted to the overlapping portfolio observation window.
+    """
+    if len(multi_period_portfolio) == 0:
+        raise ValueError("Cannot compute attribution on an empty MultiPeriodPortfolio.")
+
+    observation_parts: list[np.ndarray] = []
+    return_parts: list[np.ndarray] = []
+    weight_parts: list[np.ndarray] = []
+
+    for portfolio in multi_period_portfolio:
+        if isinstance(portfolio, FailedPortfolio):
+            continue
+        if portfolio.weight_drift:
+            # Weights held during each observation, shape (n_observations, n_assets).
+            weights = portfolio._get_weights_path()
+        else:
+            weights = np.broadcast_to(
+                portfolio.weights, (portfolio.n_observations, portfolio.n_assets)
+            )
+        aligned_weights = _align_weights(
+            weights, portfolio.assets, factor_model.asset_names
+        )
+        weight_parts.append(aligned_weights)
+        observation_parts.append(portfolio.observations)
+        return_parts.append(portfolio.returns)
+
+    if not observation_parts:
+        raise ValueError(
+            "All child portfolios are FailedPortfolio; cannot compute "
+            "realized attribution."
+        )
+
+    observations = np.concatenate(observation_parts)
+    portfolio_returns = np.concatenate(return_parts)
+    weights_per_observation = np.vstack(weight_parts)
+
+    portfolio_indices, aligned_factor_model = _select_realized_observation_window(
+        observations=observations,
+        factor_model=factor_model,
+    )
+    portfolio_returns = portfolio_returns[portfolio_indices]
+    weights_per_observation = weights_per_observation[portfolio_indices]
+    return portfolio_returns, weights_per_observation, aligned_factor_model
