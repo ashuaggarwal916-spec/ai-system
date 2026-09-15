@@ -3,33 +3,35 @@ import { randomUUID } from 'crypto';
 /**
  * Multi-Provider Model Gateway
  * Auto-switches between providers when one fails or hits limits
+ * Primary: Kira AI → OpenRouter → FreeClaude → OmniRoute → FreeLLMAPI
  */
 export class ModelGateway {
   constructor(db) {
     this.db = db;
-    this.provider = 'openrouter';
+    this.provider = 'kira-ai';
     
     // Provider chain - priority order
     this.providers = [
       {
-        name: 'openrouter',
-        apiKey: process.env.OPENROUTER_KEY || '',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        priority: 1,
-        status: 'active',
-        lastError: null,
-        errorCount: 0
-      },
-      {
         name: 'kira-ai',
-        apiKey: process.env.KIRA_AI_KEY || 'kira_244519e2e29e2b30c104bb4b4fb8638a',
+        apiKey: 'kira_244519e2e29e2b30c104bb4b4fb8638a',
         baseUrl: process.env.KIRA_AI_URL || 'https://api.kira.ai/v1',
-        priority: 2,
+        priority: 1,
         status: 'active',
         lastError: null,
         errorCount: 0,
         free_tokens: 80000000,
-        notes: '80M free tokens/month'
+        notes: '80M free tokens/month - PRIMARY'
+      },
+      {
+        name: 'openrouter',
+        apiKey: process.env.OPENROUTER_KEY || '',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        priority: 2,
+        status: process.env.OPENROUTER_KEY ? 'active' : 'standby',
+        lastError: null,
+        errorCount: 0,
+        notes: 'sk-or-v1- keys required. ci_live_ keys are Claude, not OpenRouter.'
       },
       {
         name: 'free-claude-code',
@@ -62,7 +64,7 @@ export class ModelGateway {
       }
     ];
     
-    // Register all providers
+    // Register all providers in DB
     for (const provider of this.providers) {
       this.db.prepare('INSERT OR IGNORE INTO resources (id, name, type, status, capabilities) VALUES (?, ?, ?, ?, ?)')
         .run(provider.name, provider.name, 'model-provider', provider.status, '["chat","models","tools"]');
@@ -76,16 +78,17 @@ export class ModelGateway {
   async chat({ model = 'auto', messages, stream = false, ...opts }) {
     const errors = [];
     
-    // Try each provider in priority order
+    // Sort by priority (lowest number = highest priority)
     const sortedProviders = [...this.providers].sort((a, b) => a.priority - b.priority);
     
     for (const provider of sortedProviders) {
       if (provider.status === 'disabled') continue;
+      if (!provider.apiKey) continue; // Skip providers without keys
       
       try {
         const result = await this._callProvider(provider, { model, messages, stream, ...opts });
         
-        // Success - reset error count and return
+        // Success - reset error count
         if (provider.errorCount > 0) {
           provider.errorCount = 0;
           provider.status = 'active';
@@ -154,7 +157,7 @@ export class ModelGateway {
   }
 
   async listModels() {
-    const provider = this.providers.find(p => p.name === 'openrouter');
+    const provider = this.providers.find(p => p.name === 'kira-ai');
     
     try {
       const response = await fetch(`${provider.baseUrl}/models`, {
