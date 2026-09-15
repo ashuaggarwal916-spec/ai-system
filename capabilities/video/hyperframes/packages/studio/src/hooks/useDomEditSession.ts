@@ -1,0 +1,593 @@
+import { useCallback } from "react";
+import { trackStudioEvent } from "../utils/studioTelemetry";
+import { isAudioDomElement } from "../utils/timelineInspector";
+import type { SelectElementOptions, TimelineElement } from "../player";
+import type { ImportedFontAsset } from "../components/editor/fontAssets";
+import type { RightPanelTab } from "../utils/studioHelpers";
+import type { PatchTarget } from "../utils/sourcePatcher";
+import type { SidebarTab } from "../components/sidebar/LeftSidebar";
+import type { Composition } from "@hyperframes/sdk";
+import { sdkCutoverPersist, sdkDeletePersist, type PublishSdkSession } from "../utils/sdkCutover";
+import { runResolverShadow, recordResolverParity } from "../utils/sdkResolverShadow";
+import { useAskAgentModal } from "./useAskAgentModal";
+import { useDomSelection } from "./useDomSelection";
+import { usePreviewInteraction } from "./usePreviewInteraction";
+import { useDomEditCommits } from "./useDomEditCommits";
+import { useGroupCommits } from "./useGroupCommits";
+import { useGsapScriptCommits } from "./useGsapScriptCommits";
+import { useGsapCacheVersion } from "./useGsapTweenCache";
+import { useDomEditWiring } from "./useDomEditWiring";
+import { useGsapAwareEditing } from "./useGsapAwareEditing";
+import { useStudioSelectionPublisher } from "./useStudioSelectionPublisher";
+import { useKeyframeEaseCommits } from "./useKeyframeEaseCommits";
+import type { DomEditSelection } from "../components/editor/domEditingTypes";
+import { membersForDelete } from "./domEditDeleteMembers";
+import type { RecordEditInput } from "./domEditDeleteMembers";
+// Re-exported: the delete rule lives in its own module now, and callers (and its
+// own test) have always imported it from here.
+export { membersForDelete };
+
+export interface UseDomEditSessionParams {
+  projectId: string | null;
+  activeCompPath: string | null;
+  compIdToSrc: Map<string, string>;
+  captionEditMode: boolean;
+  compositionLoading: boolean;
+  previewIframeRef: React.MutableRefObject<HTMLIFrameElement | null>;
+  timelineElements: TimelineElement[];
+  getTimelineSelectionSet: () => ReadonlySet<string>;
+  setSelectedTimelineElementId: (id: string | null, options?: SelectElementOptions) => void;
+  setTimelineSelectionSet: (ids: Set<string>) => void;
+  setRightCollapsed: (collapsed: boolean) => void;
+  setRightPanelTab: (tab: RightPanelTab) => void;
+  showToast: (message: string, tone?: "error" | "info") => void;
+  isRecordingRef?: React.RefObject<boolean>;
+  refreshPreviewDocumentVersion: () => void;
+  queueDomEditSave: <T>(save: () => Promise<T>) => Promise<T>;
+  readProjectFile: (path: string) => Promise<string>;
+  writeProjectFile: (path: string, content: string, expectedContent?: string) => Promise<void>;
+  updateEditingFileContent: (path: string, content: string) => void;
+  editHistory: { recordEdit: (entry: RecordEditInput) => Promise<void> };
+  fileTree: string[];
+  importedFontAssetsRef: React.MutableRefObject<ImportedFontAsset[]>;
+  projectDir: string | null;
+  projectIdRef: React.MutableRefObject<string | null>;
+  previewIframe: HTMLIFrameElement | null;
+  refreshKey: number;
+  previewDocumentVersion: number;
+  rightPanelTab: RightPanelTab;
+  applyStudioManualEditsToPreviewRef: React.MutableRefObject<
+    (iframe: HTMLIFrameElement) => Promise<void>
+  >;
+  syncPreviewHotkeys: (iframe: HTMLIFrameElement | null) => void;
+  reloadPreview: () => void;
+  setRefreshKey: React.Dispatch<React.SetStateAction<number>>;
+  openSourceForSelection?: (sourceFile: string, target: PatchTarget) => void;
+  selectSidebarTab?: (tab: SidebarTab) => void;
+  getSidebarTab?: () => SidebarTab;
+  sdkSession?: Composition | null;
+  publishSdkSession?: PublishSdkSession;
+  forceReloadSdkSession?: () => void;
+}
+
+export function useDomEditSession({
+  projectId,
+  activeCompPath,
+  compIdToSrc,
+  captionEditMode,
+  compositionLoading,
+  previewIframeRef,
+  timelineElements,
+  getTimelineSelectionSet,
+  setSelectedTimelineElementId,
+  setTimelineSelectionSet,
+  setRightCollapsed,
+  setRightPanelTab,
+  showToast,
+  isRecordingRef,
+  refreshPreviewDocumentVersion,
+  queueDomEditSave,
+  readProjectFile,
+  writeProjectFile,
+  updateEditingFileContent,
+  editHistory,
+  fileTree,
+  importedFontAssetsRef,
+  projectDir,
+  projectIdRef,
+  previewIframe,
+  refreshKey,
+  previewDocumentVersion,
+  rightPanelTab,
+  applyStudioManualEditsToPreviewRef,
+  syncPreviewHotkeys,
+  reloadPreview,
+  setRefreshKey: _setRefreshKey,
+  openSourceForSelection,
+  selectSidebarTab,
+  getSidebarTab,
+  sdkSession,
+  publishSdkSession,
+  forceReloadSdkSession,
+}: UseDomEditSessionParams) {
+  const isMasterView = !activeCompPath || activeCompPath === "index.html";
+  void _setRefreshKey;
+  const {
+    domEditSelection,
+    domEditGroupSelections,
+    domEditHoverSelection,
+    activeGroupElement,
+    domEditSelectionRef,
+    domEditGroupSelectionsRef,
+    setActiveGroupElement,
+    applyDomSelection,
+    clearDomSelection,
+    buildDomSelectionFromTarget,
+    resolveDomSelectionFromPreviewPoint,
+    resolveAllDomSelectionsFromPreviewPoint,
+    updateDomEditHoverSelection,
+    buildDomSelectionForTimelineElement,
+    handleTimelineElementSelect,
+    refreshDomEditSelectionFromPreview,
+    refreshDomEditGroupSelectionsFromPreview,
+    applyMarqueeSelection,
+  } = useDomSelection({
+    projectId,
+    activeCompPath,
+    isMasterView,
+    compIdToSrc,
+    captionEditMode,
+    previewIframeRef,
+    timelineElements,
+    getTimelineSelectionSet,
+    setSelectedTimelineElementId,
+    setTimelineSelectionSet,
+    setRightCollapsed,
+    setRightPanelTab,
+    previewIframe,
+    refreshKey,
+    rightPanelTab,
+  });
+
+  const {
+    agentModalOpen,
+    agentModalAnchorPoint,
+    copiedAgentPrompt,
+    agentPromptSelectionContext,
+    setAgentModalOpen,
+    setAgentPromptSelectionContext,
+    setAgentModalAnchorPoint,
+    handleAskAgent,
+    handleAgentModalSubmit,
+  } = useAskAgentModal({
+    projectId,
+    activeCompPath,
+    projectDir,
+    projectIdRef,
+    showToast,
+    domEditSelectionRef,
+    domEditSelection,
+  });
+
+  useStudioSelectionPublisher({
+    projectId,
+    domEditSelection,
+    domEditSelectionRef,
+    refreshKey,
+    previewDocumentVersion,
+    refreshDomEditSelectionFromPreview,
+  });
+  // ── GSAP cache (hoisted so both useGsapScriptCommits and useDomEditWiring share the same instance) ──
+
+  const { version: gsapCacheVersion, bump: bumpGsapCache } = useGsapCacheVersion();
+
+  // ── GSAP script commits ──
+
+  const {
+    commitMutation: gsapCommitMutation,
+    updateGsapProperty,
+    updateGsapMeta,
+    deleteGsapAnimation,
+    deleteAllForSelector,
+    addGsapAnimation,
+    addGsapProperty,
+    removeGsapProperty,
+    updateGsapFromProperty,
+    addGsapFromProperty,
+    removeGsapFromProperty,
+    addKeyframe,
+    addKeyframeBatch,
+    removeKeyframe,
+    moveKeyframe,
+    resizeKeyframedTween,
+    convertToKeyframes,
+    removeAllKeyframes,
+    setArcPath,
+    updateArcSegment,
+  } = useGsapScriptCommits({
+    projectIdRef,
+    activeCompPath,
+    previewIframeRef,
+    editHistory,
+    reloadPreview,
+    onCacheInvalidate: bumpGsapCache,
+    onFileContentChanged: updateEditingFileContent,
+    showToast,
+    sdkSession,
+    publishSdkSession,
+    writeProjectFile,
+    forceReloadSdkSession,
+  });
+
+  // ── DOM commit handlers ──
+
+  const {
+    resolveImportedFontAsset,
+    handleDomStyleCommit,
+    handleDomStyleCommitForSelection,
+    handleDomAttributeCommit,
+    handleDomAttributeLiveCommit,
+    handleDomAttributeQuietCommit,
+    handleDomHtmlAttributeCommit,
+    handleDomAttributesCommit,
+    handleDomTextCommit,
+    handleDomTextCommitForSelection,
+    handleDomRichTextCommit,
+    handleDomTextFieldStyleCommit,
+    handleDomAddTextField,
+    handleDomRemoveTextField,
+    handleDomBoxSizeCommit,
+    handleDomManualEditsReset,
+    handleDomEditElementsDelete,
+    handleDomZIndexReorderCommit,
+  } = useDomEditCommits({
+    activeCompPath,
+    previewIframeRef,
+    showToast,
+    queueDomEditSave,
+    writeProjectFile,
+    editHistory,
+    fileTree,
+    importedFontAssetsRef,
+    projectId,
+    projectIdRef,
+    reloadPreview,
+    domEditSelection,
+    applyDomSelection,
+    clearDomSelection,
+    refreshDomEditSelectionFromPreview,
+    buildDomSelectionFromTarget,
+    forceReloadSdkSession,
+    onTrySdkPersist: sdkSession
+      ? (selection, operations, originalContent, targetPath, options) => {
+          // Resolver shadow runs regardless of the cutover flag — decoupled tripwire.
+          // Pass originalContent so the runtime-node filter can suppress hf-ids
+          // absent from source (script-created nodes the SDK can't model), and
+          // the paths so cross-file edits (session models only the active comp)
+          // skip instead of emitting structural element_not_found noise.
+          runResolverShadow(sdkSession, selection.hfId, operations, originalContent, {
+            targetPath,
+            compositionPath: activeCompPath,
+          });
+          return sdkCutoverPersist(
+            selection,
+            operations,
+            originalContent,
+            targetPath,
+            sdkSession,
+            {
+              editHistory,
+              writeProjectFile,
+              reloadPreview,
+              compositionPath: activeCompPath,
+              readProjectFile,
+              publishSession: publishSdkSession,
+            },
+            options,
+          );
+        }
+      : undefined,
+    onTrySdkDelete: sdkSession
+      ? (hfId, originalContent, targetPath) =>
+          sdkDeletePersist(hfId, originalContent, targetPath, sdkSession, {
+            editHistory,
+            writeProjectFile,
+            reloadPreview,
+            compositionPath: activeCompPath,
+            readProjectFile,
+            publishSession: publishSdkSession,
+          })
+      : undefined,
+    // Resolver shadow for the z-index reorder edit: it takes the server path (no
+    // SDK persist), but the tripwire is decoupled from cutover — record whether
+    // the SDK resolves each reordered element (the reorderElements op's targets).
+    onReorderShadow: sdkSession
+      ? (targets: string[]) => {
+          // Single-flight: every target in one reorder batch shares the same file, so
+          // memoize the read instead of firing one fetch per unresolved target.
+          let reorderSrcPromise: Promise<string> | undefined;
+          const reorderSrc = activeCompPath
+            ? () => (reorderSrcPromise ??= readProjectFile(activeCompPath))
+            : undefined;
+          for (const target of targets)
+            void recordResolverParity(sdkSession, target, "reorderElements", reorderSrc);
+        }
+      : undefined,
+  });
+
+  // ── Element groups (wrap selected elements in a data-hf-group div) ──
+
+  const { groupSelection, ungroupSelection } = useGroupCommits({
+    activeCompPath,
+    showToast,
+    writeProjectFile,
+    editHistory,
+    projectIdRef,
+    reloadPreview,
+    clearDomSelection,
+    forceReloadSdkSession,
+  });
+
+  const handleDomEditElementDelete = useCallback(
+    async (selection: DomEditSelection, options?: { expandGroup?: boolean }) => {
+      // Same structural edit the timeline delete refuses mid-recording, so it
+      // refuses here too — this is now the path a Delete press takes whenever
+      // the canvas holds a selection.
+      if (isRecordingRef?.current) {
+        showToast("Cannot edit timeline while recording", "error");
+        return;
+      }
+      const members = membersForDelete(selection, domEditGroupSelectionsRef.current, options);
+      await handleDomEditElementsDelete(members);
+    },
+    [domEditGroupSelectionsRef, handleDomEditElementsDelete, isRecordingRef, showToast],
+  );
+
+  const handleGroupSelection = useCallback(() => {
+    const group = domEditGroupSelectionsRef.current;
+    const single = domEditSelectionRef.current;
+    const members = group.length > 0 ? group : single ? [single] : [];
+    if (members.length < 2) {
+      showToast("Select at least 2 elements to group", "info");
+      return;
+    }
+    // A layout group is a positioned wrapper: it takes the members' bounding
+    // box, rebases each child's left/top against it, and adopts the topmost
+    // z-index. An <audio> clip has no box — offsetWidth/Height are 0 — so
+    // grouping audio produced a 0x0 div with inline left/top written onto
+    // elements that have never been laid out, and the timeline gained a
+    // wrapper standing for nothing audible. The audio answer to "these clips
+    // belong together" is an <hf-audio-group> bus, which the timeline's own FX
+    // pointer creates, so the refusal names it rather than just declining.
+    if (members.some((m) => isAudioDomElement(m.element))) {
+      showToast(
+        members.every((m) => isAudioDomElement(m.element))
+          ? "Audio clips group into a bus — use FX on the track header"
+          : "Can't group audio clips with layout elements",
+        "info",
+      );
+      return;
+    }
+    trackStudioEvent("group", { action: "create", count: members.length });
+    void groupSelection(members);
+  }, [domEditGroupSelectionsRef, domEditSelectionRef, groupSelection, showToast]);
+
+  const handleUngroupSelection = useCallback(() => {
+    const sel = domEditSelectionRef.current;
+    if (!sel?.element.hasAttribute("data-hf-group")) {
+      showToast("Select a group to ungroup", "info");
+      return;
+    }
+    // Dissolving the group exits any drill-in (the wrapper is about to vanish).
+    trackStudioEvent("group", { action: "ungroup" });
+    setActiveGroupElement(null);
+    void ungroupSelection(sel);
+  }, [domEditSelectionRef, ungroupSelection, setActiveGroupElement, showToast]);
+
+  // ── Wiring: selection sync, GSAP cache, preview sync, selection handlers ──
+
+  const {
+    onClickToSource,
+    selectedGsapAnimations,
+    gsapMultipleTimelines,
+    gsapUnsupportedTimelinePattern,
+    trackGsapInteractionFailure,
+    makeFetchFallback,
+    handleGsapUpdateProperty,
+    handleGsapUpdateMeta,
+    handleGsapDeleteAnimation,
+    handleGsapDeleteAllForElement,
+    handleGsapAddAnimation,
+    handleGsapAddProperty,
+    handleGsapRemoveProperty,
+    handleGsapUpdateFromProperty,
+    handleGsapAddFromProperty,
+    handleGsapRemoveFromProperty,
+    handleGsapAddKeyframe,
+    handleGsapAddKeyframeBatch,
+    handleGsapRemoveKeyframe,
+    handleGsapMoveKeyframeToPlayhead,
+    handleGsapMoveKeyframe,
+    handleGsapResizeKeyframedTween,
+    handleGsapConvertToKeyframes,
+    handleGsapRemoveAllKeyframes,
+    handleResetSelectedElementKeyframes,
+  } = useDomEditWiring({
+    // fallow-ignore-next-line code-duplication
+    projectId,
+    activeCompPath,
+    domEditSelection,
+    domEditSelectionRef,
+    domEditGroupSelectionsRef,
+    refreshDomEditGroupSelectionsFromPreview,
+    previewIframeRef,
+    previewIframe,
+    captionEditMode,
+    refreshKey,
+    gsapCacheVersion,
+    bumpGsapCache,
+    showToast,
+    refreshPreviewDocumentVersion,
+    syncPreviewHotkeys,
+    applyStudioManualEditsToPreviewRef,
+    applyDomSelection,
+    buildDomSelectionFromTarget,
+    openSourceForSelection,
+    selectSidebarTab,
+    getSidebarTab,
+    updateGsapProperty,
+    updateGsapMeta,
+    deleteGsapAnimation,
+    deleteAllForSelector,
+    addGsapAnimation,
+    addGsapProperty,
+    removeGsapProperty,
+    updateGsapFromProperty,
+    addGsapFromProperty,
+    removeGsapFromProperty,
+    addKeyframe,
+    addKeyframeBatch,
+    removeKeyframe,
+    moveKeyframe,
+    resizeKeyframedTween,
+    convertToKeyframes,
+    removeAllKeyframes,
+    handleDomManualEditsReset,
+  });
+  const {
+    handlePreviewCanvasMouseDown,
+    handlePreviewCanvasPointerMove,
+    handlePreviewCanvasPointerLeave,
+    handleBlockedDomMove,
+    handleDomManualDragStart,
+  } = usePreviewInteraction({
+    captionEditMode,
+    compositionLoading,
+    previewIframeRef,
+    showToast,
+    applyDomSelection,
+    resolveDomSelectionFromPreviewPoint,
+    resolveAllDomSelectionsFromPreviewPoint,
+    updateDomEditHoverSelection,
+    setActiveGroupElement,
+    onClickToSource,
+  });
+  const {
+    getGsapAnimationsForSelection,
+    handleGsapAwarePathOffsetCommit,
+    handleGsapAwareGroupPathOffsetCommit,
+    handleGsapAwareBoxSizeCommit,
+    handleGsapAwareRotationCommit,
+    commitAnimatedProperty,
+    commitAnimatedProperties,
+    handleSetArcPath,
+    handleUpdateArcSegment,
+    handleUnroll,
+    commitMutation,
+  } = useGsapAwareEditing({
+    domEditSelection,
+    selectedGsapAnimations,
+    gsapCommitMutation,
+    previewIframeRef,
+    showToast,
+    bumpGsapCache,
+    makeFetchFallback,
+    trackGsapInteractionFailure,
+    handleDomBoxSizeCommit,
+    addGsapAnimation,
+    convertToKeyframes,
+    setArcPath,
+    updateArcSegment,
+  });
+  const { handleUpdateSegmentEase, handleUpdateKeyframeEase, handleSetAllKeyframeEases } =
+    useKeyframeEaseCommits({ gsapCommitMutation, domEditSelectionRef });
+  return {
+    domEditSelection,
+    domEditGroupSelections,
+    domEditHoverSelection,
+    activeGroupElement,
+    agentModalOpen,
+    agentModalAnchorPoint,
+    copiedAgentPrompt,
+    agentPromptSelectionContext,
+    domEditSelectionRef,
+    // Callbacks
+    handleTimelineElementSelect,
+    handlePreviewCanvasMouseDown,
+    handlePreviewCanvasPointerMove,
+    handlePreviewCanvasPointerLeave,
+    applyDomSelection,
+    clearDomSelection,
+    handleDomStyleCommit,
+    handleDomStyleCommitForSelection,
+    handleDomAttributeCommit,
+    handleDomAttributeLiveCommit,
+    handleDomAttributeQuietCommit,
+    handleDomHtmlAttributeCommit,
+    handleDomAttributesCommit,
+    handleDomPathOffsetCommit: handleGsapAwarePathOffsetCommit,
+    handleDomGroupPathOffsetCommit: handleGsapAwareGroupPathOffsetCommit,
+    handleDomZIndexReorderCommit,
+    handleDomBoxSizeCommit: handleGsapAwareBoxSizeCommit,
+    handleDomRotationCommit: handleGsapAwareRotationCommit,
+    handleDomManualEditsReset,
+    handleDomTextCommit,
+    handleDomTextCommitForSelection,
+    handleDomRichTextCommit,
+    handleDomTextFieldStyleCommit,
+    handleDomAddTextField,
+    handleDomRemoveTextField,
+    getGsapAnimationsForSelection,
+    handleAskAgent,
+    handleAgentModalSubmit,
+    handleBlockedDomMove,
+    handleDomManualDragStart,
+    handleDomEditElementDelete,
+    handleGroupSelection,
+    handleUngroupSelection,
+    setActiveGroupElement,
+    buildDomSelectionFromTarget,
+    buildDomSelectionForTimelineElement,
+    updateDomEditHoverSelection,
+    applyMarqueeSelection,
+    resolveImportedFontAsset,
+    setAgentModalOpen,
+    setAgentPromptSelectionContext,
+    setAgentModalAnchorPoint,
+
+    // GSAP script editing
+    selectedGsapAnimations,
+    gsapMultipleTimelines,
+    gsapUnsupportedTimelinePattern,
+    handleGsapUpdateProperty,
+    handleGsapUpdateMeta,
+    handleGsapDeleteAnimation,
+    handleGsapDeleteAllForElement,
+    handleGsapAddAnimation,
+    handleGsapAddProperty,
+    handleGsapRemoveProperty,
+    handleGsapUpdateFromProperty,
+    handleGsapAddFromProperty,
+    handleGsapRemoveFromProperty,
+    handleGsapAddKeyframe,
+    handleGsapAddKeyframeBatch,
+    handleGsapRemoveKeyframe,
+    handleGsapMoveKeyframeToPlayhead,
+    handleGsapMoveKeyframe,
+    handleGsapResizeKeyframedTween,
+    handleGsapConvertToKeyframes,
+    handleGsapRemoveAllKeyframes,
+    handleResetSelectedElementKeyframes,
+    handleUpdateKeyframeEase,
+    handleUpdateSegmentEase,
+    handleSetAllKeyframeEases,
+    commitAnimatedProperty,
+    commitAnimatedProperties,
+    handleSetArcPath,
+    handleUpdateArcSegment,
+    handleUnroll,
+    invalidateGsapCache: bumpGsapCache,
+    previewIframeRef,
+    commitMutation,
+  };
+}
