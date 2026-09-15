@@ -22,6 +22,7 @@ import { MemoryManager } from './memory/index.js';
 import { ModelGateway } from './models/index.js';
 import { ResourceRegistry } from './resources/index.js';
 import { WebSocketManager } from './websocket/index.js';
+import { PluginManager } from './plugins/index.js';
 import { apiRouter } from './api/index.js';
 
 config();
@@ -43,6 +44,7 @@ async function main() {
   const tasks = new TaskEngine(db, agents, memory);
   const brain = new Brain(db, agents, models, tasks, memory, registry);
   await brain.loadSkills();
+  const plugins = new PluginManager(db);
   
   // Express setup
   const app = express();
@@ -56,7 +58,7 @@ async function main() {
   if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
   
   // API routes
-  app.use('/api', apiRouter({ auth, brain, agents, tasks, memory, registry }));
+  app.use('/api', apiRouter({ auth, brain, agents, tasks, memory, registry, plugins }));
   
   // WebSocket
   const io = new Server(server, { cors: { origin: '*' } });

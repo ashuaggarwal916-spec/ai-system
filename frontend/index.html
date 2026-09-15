@@ -23,444 +23,149 @@
       --warning: #f59e0b;
       --error: #ef4444;
       --user-bubble: #1e1e2e;
-      --assistant-bubble: transparent;
     }
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      height: 100vh;
-      overflow: hidden;
-    }
-    
-    /* Layout */
+    body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; overflow: hidden; }
     .app { display: flex; height: 100vh; }
     
     /* Sidebar */
-    .sidebar {
-      width: 260px;
-      background: var(--bg-secondary);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
-    .sidebar-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .new-chat-btn {
-      width: 100%;
-      padding: 10px 14px;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: background 0.2s;
-    }
+    .sidebar { width: 260px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+    .new-chat-btn { width: 100%; padding: 10px 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px; }
     .new-chat-btn:hover { background: var(--accent-hover); }
-    
-    .sidebar-nav {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px 8px;
-    }
-    .nav-section {
-      margin-bottom: 16px;
-    }
-    .nav-section-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 4px 8px;
-      margin-bottom: 4px;
-    }
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text-secondary);
-      transition: all 0.15s;
-      margin-bottom: 2px;
-    }
+    .sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 8px; }
+    .nav-section { margin-bottom: 16px; }
+    .nav-section-title { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; margin-bottom: 4px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); transition: all 0.15s; margin-bottom: 2px; }
     .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
     .nav-item.active { background: var(--bg-tertiary); color: var(--text-primary); }
     .nav-item-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
-    
-    .sidebar-footer {
-      padding: 12px;
-      border-top: 1px solid var(--border);
-    }
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      font-weight: 600;
-      color: white;
-    }
-    .user-details { flex: 1; }
+    .sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
+    .user-info { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: pointer; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: white; }
     .user-name { font-size: 13px; font-weight: 500; }
     .user-email { font-size: 11px; color: var(--text-muted); }
     
-    /* Main Content */
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-    
-    /* Header */
-    .header {
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
     .header-title { font-size: 16px; font-weight: 600; }
-    .header-badge {
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
-      background: rgba(139, 92, 246, 0.15);
-      color: var(--accent);
-    }
+    .header-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; background: rgba(139, 92, 246, 0.15); color: var(--accent); }
     .header-right { display: flex; align-items: center; gap: 8px; }
-    .header-btn {
-      width: 32px;
-      height: 32px;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.15s;
-    }
+    .header-btn { width: 32px; height: 32px; border: none; background: transparent; color: var(--text-secondary); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .header-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
     
-    /* Chat Area */
-    .chat-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      scroll-behavior: smooth;
-    }
-    .chat-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      text-align: center;
-      padding: 40px;
-    }
-    .chat-empty h1 {
-      font-size: 32px;
-      font-weight: 700;
-      margin-bottom: 12px;
-      background: linear-gradient(135deg, var(--accent), #ec4899);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .chat-empty p {
-      color: var(--text-muted);
-      font-size: 15px;
-      max-width: 500px;
-      line-height: 1.6;
-    }
+    /* Content */
+    .content { flex: 1; overflow-y: auto; padding: 20px; }
+    
+    /* Chat */
+    .chat-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 40px; }
+    .chat-empty h1 { font-size: 32px; font-weight: 700; margin-bottom: 12px; background: linear-gradient(135deg, var(--accent), #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .chat-empty p { color: var(--text-muted); font-size: 15px; max-width: 500px; line-height: 1.6; }
     
     /* Messages */
-    .message {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 16px 0;
-      display: flex;
-      gap: 16px;
-    }
-    .message-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: 600;
-    }
+    .message { max-width: 760px; margin: 0 auto; padding: 16px 0; display: flex; gap: 16px; }
+    .message-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
     .message.user .message-avatar { background: #3b82f6; }
     .message.assistant .message-avatar { background: var(--accent); }
+    .message-content { flex: 1; min-width: 0; }
+    .message-role { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+    .message-time { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+    .message-text { font-size: 14px; line-height: 1.7; color: var(--text-primary); white-space: pre-wrap; word-wrap: break-word; }
     
-    .message-content {
-      flex: 1;
-      min-width: 0;
-    }
-    .message-role {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 4px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .message-time {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 400;
-    }
-    .message-text {
-      font-size: 14px;
-      line-height: 1.7;
-      color: var(--text-primary);
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-    .message-text code {
-      background: rgba(255,255,255,0.05);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-    .message-text pre {
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
-      margin: 8px 0;
-      overflow-x: auto;
-    }
-    .message-text pre code {
-      background: transparent;
-      padding: 0;
-    }
-    
-    /* Input Area */
-    .input-area {
-      flex-shrink: 0;
-      padding: 16px 20px 20px;
-      background: linear-gradient(transparent, var(--bg-primary) 30%);
-    }
-    .input-wrapper {
-      max-width: 760px;
-      margin: 0 auto;
-    }
-    .input-container {
-      display: flex;
-      align-items: flex-end;
-      gap: 10px;
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 12px;
-      transition: border-color 0.2s;
-    }
-    .input-container:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px var(--accent);
-    }
-    .input-field {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: var(--text-primary);
-      font-size: 14px;
-      font-family: inherit;
-      resize: none;
-      max-height: 200px;
-      min-height: 24px;
-      line-height: 1.5;
-      padding: 4px 0;
-    }
+    /* Input */
+    .input-area { flex-shrink: 0; padding: 16px 20px 20px; background: linear-gradient(transparent, var(--bg-primary) 30%); }
+    .input-wrapper { max-width: 760px; margin: 0 auto; }
+    .input-container { display: flex; align-items: flex-end; gap: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+    .input-container:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .input-field { flex: 1; background: transparent; border: none; outline: none; color: var(--text-primary); font-size: 14px; font-family: inherit; resize: none; max-height: 200px; min-height: 24px; line-height: 1.5; padding: 4px 0; }
     .input-field::placeholder { color: var(--text-muted); }
-    .input-btn {
-      width: 32px;
-      height: 32px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.15s;
-      flex-shrink: 0;
-    }
-    .input-btn.send {
-      background: var(--accent);
-      color: white;
-    }
+    .input-btn { width: 32px; height: 32px; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .input-btn.send { background: var(--accent); color: white; }
     .input-btn.send:hover { background: var(--accent-hover); }
-    .input-btn.send:disabled {
-      background: var(--bg-hover);
-      color: var(--text-muted);
-      cursor: not-allowed;
-    }
+    .input-btn.send:disabled { background: var(--bg-hover); color: var(--text-muted); cursor: not-allowed; }
+    .input-footer { text-align: center; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
     
-    .input-footer {
-      text-align: center;
-      margin-top: 8px;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
+    /* Status */
+    .status-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
     
-    /* Status Bar */
-    .status-bar {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 6px;
-      font-size: 11px;
-      color: var(--text-muted);
-      border-top: 1px solid var(--border);
-    }
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--success);
-    }
-    .status-dot.warning { background: var(--warning); }
-    .status-dot.error { background: var(--error); }
-    
-    /* Auth Modal */
-    .auth-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      backdrop-filter: blur(4px);
-    }
-    .auth-modal {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 32px;
-      width: 100%;
-      max-width: 380px;
-    }
-    .auth-modal h2 {
-      font-size: 24px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    .auth-modal p {
-      color: var(--text-muted);
-      font-size: 14px;
-      margin-bottom: 24px;
-    }
-    .auth-input {
-      width: 100%;
-      padding: 10px 12px;
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text-primary);
-      font-size: 14px;
-      margin-bottom: 12px;
-      outline: none;
-    }
+    /* Auth */
+    .auth-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px); }
+    .auth-modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 32px; width: 100%; max-width: 380px; }
+    .auth-modal h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+    .auth-modal p { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+    .auth-input { width: 100%; padding: 10px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 14px; margin-bottom: 12px; outline: none; }
     .auth-input:focus { border-color: var(--accent); }
-    .auth-btn {
-      width: 100%;
-      padding: 10px;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      margin-top: 8px;
-    }
+    .auth-btn { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px; }
     .auth-btn:hover { background: var(--accent-hover); }
-    .auth-switch {
-      text-align: center;
-      margin-top: 16px;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-    .auth-switch a {
-      color: var(--accent);
-      cursor: pointer;
-    }
+    .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-muted); }
+    .auth-switch a { color: var(--accent); cursor: pointer; }
     
-    /* Loading Animation */
-    .typing-indicator {
-      display: flex;
-      gap: 4px;
-      padding: 4px 0;
-    }
-    .typing-indicator span {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--text-muted);
-      animation: typing 1.4s infinite;
-    }
+    /* Typing */
+    .typing-indicator { display: flex; gap: 4px; padding: 4px 0; }
+    .typing-indicator span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: typing 1.4s infinite; }
     .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
     .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-    
-    @keyframes typing {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 1; }
-    }
+    @keyframes typing { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
     
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    
+    /* Page views */
+    .page { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .page h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .page-desc { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+    
+    /* Plugins */
+    .plugins-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .plugins-stats { display: flex; gap: 16px; }
+    .stat-card { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; text-align: center; min-width: 80px; }
+    .stat-value { font-size: 20px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+    
+    .add-plugin-btn { padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .add-plugin-btn:hover { background: var(--accent-hover); }
+    
+    .plugin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .plugin-card { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: all 0.15s; }
+    .plugin-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .plugin-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .plugin-name { font-size: 14px; font-weight: 600; }
+    .plugin-version { font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; }
+    .plugin-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; }
+    .plugin-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+    .plugin-tag { font-size: 11px; padding: 3px 8px; background: rgba(139, 92, 246, 0.1); color: var(--accent); border-radius: 4px; }
+    .plugin-tag.external { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+    .plugin-actions { display: flex; gap: 6px; }
+    .plugin-btn { padding: 5px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; border: none; font-weight: 500; }
+    .plugin-btn.enable { background: var(--success); color: white; }
+    .plugin-btn.disable { background: var(--warning); color: white; }
+    .plugin-btn.delete { background: var(--error); color: white; }
+    .plugin-btn.install { background: var(--accent); color: white; }
+    
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(4px); }
+    .modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; max-height: 80vh; overflow-y: auto; }
+    .modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+    .modal label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; margin-top: 12px; }
+    .modal input, .modal textarea, .modal select { width: 100%; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; }
+    .modal textarea { min-height: 60px; resize: vertical; }
+    .modal input:focus, .modal textarea:focus { border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+    .modal-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+    .modal-btn.primary { background: var(--accent); color: white; }
+    .modal-btn.secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
     
     @media (max-width: 768px) {
       .sidebar { display: none; }
-      .chat-container { padding: 12px; }
-      .input-area { padding: 12px; }
+      .plugin-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <!-- Auth Overlay -->
   <div class="auth-overlay" id="authOverlay" style="display: none;">
     <div class="auth-modal">
       <h2 id="authTitle">Welcome back</h2>
@@ -468,60 +173,33 @@
       <input type="email" class="auth-input" id="authEmail" placeholder="Email">
       <input type="password" class="auth-input" id="authPassword" placeholder="Password">
       <button class="auth-btn" onclick="handleAuth()" id="authBtn">Sign in</button>
-      <p class="auth-switch" id="authSwitch">
-        Don't have an account? <a onclick="toggleAuthMode()">Sign up</a>
-      </p>
+      <p class="auth-switch" id="authSwitch">Don't have an account? <a onclick="toggleAuthMode()">Sign up</a></p>
     </div>
   </div>
 
-  <!-- Main App -->
   <div class="app" id="app">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
         <button class="new-chat-btn" onclick="newChat()">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Chat
         </button>
       </div>
-      
       <nav class="sidebar-nav">
         <div class="nav-section">
           <div class="nav-section-title">Navigation</div>
-          <div class="nav-item active" onclick="showView('chat')">
-            <span class="nav-item-icon">💬</span> Chat
-          </div>
-          <div class="nav-item" onclick="showView('tasks')">
-            <span class="nav-item-icon">📋</span> Tasks
-          </div>
-          <div class="nav-item" onclick="showView('projects')">
-            <span class="nav-item-icon">📁</span> Projects
-          </div>
-          <div class="nav-item" onclick="showView('agents')">
-            <span class="nav-item-icon">🤖</span> Agents
-          </div>
-          <div class="nav-item" onclick="showView('files')">
-            <span class="nav-item-icon">📄</span> Files
-          </div>
+          <div class="nav-item active" onclick="showView('chat')"><span class="nav-item-icon">💬</span> Chat</div>
+          <div class="nav-item" onclick="showView('plugins')"><span class="nav-item-icon">🧩</span> Plugins</div>
+          <div class="nav-item" onclick="showView('agents')"><span class="nav-item-icon">🤖</span> Agents</div>
+          <div class="nav-item" onclick="showView('tasks')"><span class="nav-item-icon">📋</span> Tasks</div>
         </div>
-        
         <div class="nav-section">
           <div class="nav-section-title">System</div>
-          <div class="nav-item" onclick="showView('memory')">
-            <span class="nav-item-icon">🧠</span> Memory
-          </div>
-          <div class="nav-item" onclick="showView('resources')">
-            <span class="nav-item-icon">⚡</span> Resources
-          </div>
-          <div class="nav-item" onclick="showView('models')">
-            <span class="nav-item-icon">🌐</span> Models
-          </div>
+          <div class="nav-item" onclick="showView('models')"><span class="nav-item-icon">🌐</span> Models</div>
+          <div class="nav-item" onclick="showView('memory')"><span class="nav-item-icon">🧠</span> Memory</div>
+          <div class="nav-item" onclick="showView('resources')"><span class="nav-item-icon">⚡</span> Resources</div>
         </div>
       </nav>
-      
       <div class="sidebar-footer">
         <div class="user-info" onclick="showView('settings')">
           <div class="user-avatar" id="userAvatar">U</div>
@@ -533,7 +211,6 @@
       </div>
     </aside>
     
-    <!-- Main -->
     <main class="main">
       <header class="header">
         <div class="header-left">
@@ -541,56 +218,26 @@
           <span class="header-badge" id="modelBadge">auto</span>
         </div>
         <div class="header-right">
-          <button class="header-btn" title="Toggle theme">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="5"></circle>
-              <line x1="12" y1="1" x2="12" y2="3"></line>
-              <line x1="12" y1="21" x2="12" y2="23"></line>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-              <line x1="1" y1="12" x2="3" y2="12"></line>
-              <line x1="21" y1="12" x2="23" y2="12"></line>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-            </svg>
-          </button>
-          <button class="header-btn" title="Settings" onclick="showView('settings')">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-          </button>
+          <button class="header-btn" onclick="showView('settings')" title="Settings">⚙</button>
         </div>
       </header>
       
-      <div class="chat-container" id="chatContainer">
+      <div class="content" id="contentContainer">
         <div class="chat-empty" id="chatEmpty">
           <h1>AI System</h1>
-          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy — I'll assemble a team of agents to get it done.</p>
+          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy.</p>
         </div>
       </div>
       
       <div class="input-area">
         <div class="input-wrapper">
           <div class="input-container">
-            <textarea 
-              class="input-field" 
-              id="messageInput" 
-              placeholder="Send a message..." 
-              rows="1"
-              onkeydown="handleKeyDown(event)"
-              oninput="autoResize(this)"
-            ></textarea>
+            <textarea class="input-field" id="messageInput" placeholder="Send a message..." rows="1" onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
             <button class="input-btn send" id="sendBtn" onclick="sendMessage()" disabled>
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
-          <div class="input-footer">
-            AI System can make mistakes. Important information should be verified.
-          </div>
+          <div class="input-footer">AI System can make mistakes. Important information should be verified.</div>
         </div>
       </div>
       
@@ -598,7 +245,7 @@
         <span class="status-dot" id="statusDot"></span>
         <span id="statusText">Ready</span>
         <span>•</span>
-        <span id="providerInfo">Provider: OpenRouter</span>
+        <span id="providerInfo">Provider: Kira AI</span>
         <span>•</span>
         <span id="tokenUsage">Tokens: 0</span>
       </div>
@@ -612,31 +259,18 @@
     let currentView = 'chat';
     let isLoading = false;
     
-    // Auth
     function toggleAuthMode() {
-      const title = document.getElementById('authTitle');
-      const subtitle = document.getElementById('authSubtitle');
-      const btn = document.getElementById('authBtn');
-      const switchEl = document.getElementById('authSwitch');
-      
-      if (btn.textContent === 'Sign in') {
-        title.textContent = 'Create account';
-        subtitle.textContent = 'Sign up for AI System';
-        btn.textContent = 'Sign up';
-        switchEl.innerHTML = 'Already have an account? <a onclick="toggleAuthMode()">Sign in</a>';
-      } else {
-        title.textContent = 'Welcome back';
-        subtitle.textContent = 'Sign in to continue to AI System';
-        btn.textContent = 'Sign in';
-        switchEl.innerHTML = 'Don\'t have an account? <a onclick="toggleAuthMode()">Sign up</a>';
-      }
+      const isLogin = document.getElementById('authBtn').textContent === 'Sign in';
+      document.getElementById('authTitle').textContent = isLogin ? 'Create account' : 'Welcome back';
+      document.getElementById('authSubtitle').textContent = isLogin ? 'Sign up for AI System' : 'Sign in to continue to AI System';
+      document.getElementById('authBtn').textContent = isLogin ? 'Sign up' : 'Sign in';
+      document.getElementById('authSwitch').innerHTML = isLogin ? 'Already have an account? <a onclick="toggleAuthMode()">Sign in</a>' : 'Don\'t have an account? <a onclick="toggleAuthMode()">Sign up</a>';
     }
     
     async function handleAuth() {
       const email = document.getElementById('authEmail').value;
       const password = document.getElementById('authPassword').value;
       const isLogin = document.getElementById('authBtn').textContent === 'Sign in';
-      
       try {
         const res = await fetch(`${API}/auth/${isLogin ? 'login' : 'register'}`, {
           method: 'POST',
@@ -644,7 +278,6 @@
           body: JSON.stringify({ email, password })
         });
         const data = await res.json();
-        
         if (data.success) {
           token = data.token;
           user = data.user;
@@ -653,11 +286,9 @@
           document.getElementById('authOverlay').style.display = 'none';
           updateUserUI();
         } else {
-          alert(data.error || 'Authentication failed');
+          alert(data.error || 'Auth failed');
         }
-      } catch (err) {
-        alert('Network error: ' + err.message);
-      }
+      } catch (err) { alert('Error: ' + err.message); }
     }
     
     function updateUserUI() {
@@ -668,22 +299,12 @@
       }
     }
     
-    function logout() {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      token = null;
-      user = null;
-      document.getElementById('authOverlay').style.display = 'flex';
-    }
-    
-    // Chat
     function newChat() {
-      document.getElementById('chatContainer').innerHTML = `
+      document.getElementById('contentContainer').innerHTML = `
         <div class="chat-empty" id="chatEmpty">
           <h1>AI System</h1>
-          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy — I'll assemble a team of agents to get it done.</p>
-        </div>
-      `;
+          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy.</p>
+        </div>`;
     }
     
     async function sendMessage() {
@@ -694,36 +315,10 @@
       isLoading = true;
       document.getElementById('sendBtn').disabled = true;
       document.getElementById('statusText').textContent = 'Thinking...';
-      document.getElementById('statusDot').className = 'status-dot warning';
-      
-      // Remove empty state
-      const empty = document.getElementById('chatEmpty');
-      if (empty) empty.remove();
-      
-      // Add user message
-      const container = document.getElementById('chatContainer');
-      container.innerHTML += `
-        <div class="message user">
-          <div class="message-avatar">${user.email[0].toUpperCase()}</div>
-          <div class="message-content">
-            <div class="message-role">You <span class="message-time">${new Date().toLocaleTimeString()}</span></div>
-            <div class="message-text">${escapeHtml(message)}</div>
-          </div>
-        </div>
+      document.getElementById('contentContainer').innerHTML += `
+        <div class="message user"><div class="message-avatar">${user.email[0].toUpperCase()}</div><div class="message-content"><div class="message-role">You</div><div class="message-text">${escapeHtml(message)}</div></div></div>
+        <div class="message assistant"><div class="message-avatar">AI</div><div class="message-content"><div class="message-role">Assistant</div><div class="typing-indicator"><span></span><span></span><span></span></div></div></div>
       `;
-      
-      // Add typing indicator
-      const typingId = 'typing-' + Date.now();
-      container.innerHTML += `
-        <div class="message assistant" id="${typingId}">
-          <div class="message-avatar">AI</div>
-          <div class="message-content">
-            <div class="message-role">Assistant <span class="message-time">${new Date().toLocaleTimeString()}</span></div>
-            <div class="typing-indicator"><span></span><span></span><span></span></div>
-          </div>
-        </div>
-      `;
-      container.scrollTop = container.scrollHeight;
       input.value = '';
       input.style.height = 'auto';
       
@@ -734,48 +329,20 @@
           body: JSON.stringify({ message })
         });
         const data = await res.json();
-        
-        // Remove typing indicator
-        document.getElementById(typingId).remove();
-        
-        // Add assistant response
-        container.innerHTML += `
-          <div class="message assistant">
-            <div class="message-avatar">AI</div>
-            <div class="message-content">
-              <div class="message-role">Assistant <span class="message-time">${new Date().toLocaleTimeString()}</span></div>
-              <div class="message-text">${formatResponse(data)}</div>
-            </div>
-          </div>
+        document.querySelector('.typing-indicator').closest('.message').remove();
+        document.getElementById('contentContainer').innerHTML += `
+          <div class="message assistant"><div class="message-avatar">AI</div><div class="message-content"><div class="message-role">Assistant</div><div class="message-text">${escapeHtml(data.content || data.error || JSON.stringify(data))}</div></div></div>
         `;
-        
-        // Update token usage if available
-        if (data.usage) {
-          document.getElementById('tokenUsage').textContent = `Tokens: ${data.usage.total_tokens || 0}`;
-        }
+        if (data.usage) document.getElementById('tokenUsage').textContent = `Tokens: ${data.usage.total_tokens || 0}`;
       } catch (err) {
-        document.getElementById(typingId).remove();
-        container.innerHTML += `
-          <div class="message assistant">
-            <div class="message-avatar">AI</div>
-            <div class="message-content">
-              <div class="message-text" style="color: var(--error)}">Error: ${err.message}</div>
-            </div>
-          </div>
-        `;
+        document.querySelector('.typing-indicator').closest('.message').remove();
+        document.getElementById('contentContainer').innerHTML += `<div class="message assistant"><div class="message-avatar">AI</div><div class="message-content"><div class="message-text" style="color:var(--error)">Error: ${err.message}</div></div></div>`;
       }
       
       isLoading = false;
       document.getElementById('sendBtn').disabled = false;
       document.getElementById('statusText').textContent = 'Ready';
-      document.getElementById('statusDot').className = 'status-dot';
-      container.scrollTop = container.scrollHeight;
-    }
-    
-    function formatResponse(data) {
-      if (data.error) return `<span style="color:var(--error)">${escapeHtml(data.error)}</span>`;
-      if (data.content) return escapeHtml(data.content);
-      return escapeHtml(JSON.stringify(data, null, 2));
+      document.getElementById('contentContainer').scrollTop = document.getElementById('contentContainer').scrollHeight;
     }
     
     function escapeHtml(text) {
@@ -791,68 +358,154 @@
     }
     
     function handleKeyDown(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     }
     
-    // Views
-    function showView(view) {
+    async function showView(view) {
       currentView = view;
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       event.target.closest('.nav-item')?.classList.add('active');
       
-      const container = document.getElementById('chatContainer');
+      const container = document.getElementById('contentContainer');
       
-      if (view === 'chat') {
-        newChat();
+      if (view === 'chat') { newChat(); return; }
+      
+      if (view === 'plugins') {
+        container.innerHTML = `<div class="page"><h1>Plugins</h1><p class="page-desc">Manage capabilities and install external plugins</p><div class="plugins-header"><div class="plugins-stats" id="pluginStats"></div><button class="add-plugin-btn" onclick="showAddPluginModal()">+ Add Plugin</button></div><div id="pluginGrid" class="plugin-grid"></div></div>`;
+        loadPlugins();
         return;
       }
       
-      container.innerHTML = `<div class="chat-empty"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p>Loading...</p></div>`;
+      container.innerHTML = `<div class="page"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p style="color:var(--text-muted)">Loading...</p></div>`;
       
-      // Fetch data based on view
-      const endpoints = {
-        tasks: '/tasks',
-        agents: '/agents',
-        resources: '/resources',
-        models: '/models'
-      };
-      
+      const endpoints = { tasks: '/tasks', agents: '/agents', resources: '/resources', models: '/models', memory: '/memory' };
       if (endpoints[view]) {
-        fetch(`${API}${endpoints[view]}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        .then(r => r.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            container.innerHTML = `<div style="max-width:760px;margin:0 auto;padding:20px 0;">
-              <h2 style="margin-bottom:20px;">${view.charAt(0).toUpperCase() + view.slice(1)}</h2>
-              ${data.length === 0 ? '<p style="color:var(--text-muted)">No items found</p>' : ''}
-              ${data.map(item => `
-                <div style="padding:12px;background:var(--bg-tertiary);border-radius:8px;margin-bottom:8px;border:1px solid var(--border);">
-                  <div style="font-weight:500;">${escapeHtml(item.name || item.title || item.id)}</div>
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-                    ${item.type || item.status || ''} ${item.role ? '• ' + item.role : ''}
-                    ${item.capabilities && item.capabilities.length ? '• ' + (Array.isArray(item.capabilities) ? item.capabilities.join(', ') : item.capabilities) : ''}
-                  </div>
-                </div>
-              `).join('')}
-            </div>`;
-          } else {
-            container.innerHTML = `<pre style="background:var(--bg-tertiary);padding:16px;border-radius:8px;overflow:auto;">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
-          }
-        })
-        .catch(err => {
-          container.innerHTML = `<div class="chat-empty"><h2>Error</h2><p>${err.message}</p></div>`;
-        });
-      } else {
-        container.innerHTML = `<div class="chat-empty"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p>Coming soon</p></div>`;
+        fetch(`${API}${endpoints[view]}`, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(data => {
+            if (Array.isArray(data)) {
+              container.innerHTML = `<div class="page"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">${data.map(item => `<div class="plugin-card"><div class="plugin-name">${escapeHtml(item.name || item.title || item.id)}</div><div class="plugin-desc">${escapeHtml(item.description || item.type || item.status || '')}</div></div>`).join('')}</div></div>`;
+            } else {
+              container.innerHTML = `<div class="page"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><pre style="background:var(--bg-tertiary);padding:16px;border-radius:8px;overflow:auto;font-size:12px;">${escapeHtml(JSON.stringify(data, null, 2))}</pre></div>`;
+            }
+          })
+          .catch(err => { container.innerHTML = `<div class="page"><h2>Error</h2><p>${err.message}</p></div>`; });
       }
     }
     
-    // Init
+    async function loadPlugins() {
+      try {
+        const res = await fetch(`${API}/plugins`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const plugins = await res.json();
+        const statsRes = await fetch(`${API}/plugins/stats`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const stats = await statsRes.json();
+        
+        document.getElementById('pluginStats').innerHTML = `
+          <div class="stat-card"><div class="stat-value">${stats.total}</div><div class="stat-label">Total</div></div>
+          <div class="stat-card"><div class="stat-value">${stats.active}</div><div class="stat-label">Active</div></div>
+          <div class="stat-card"><div class="stat-value">${stats.external}</div><div class="stat-label">External</div></div>
+        `;
+        
+        document.getElementById('pluginGrid').innerHTML = plugins.map(p => `
+          <div class="plugin-card">
+            <div class="plugin-card-header">
+              <span class="plugin-name">${escapeHtml(p.name)}</span>
+              <span class="plugin-version">v${p.version}</span>
+            </div>
+            <div class="plugin-desc">${escapeHtml(p.description)}</div>
+            <div class="plugin-tags">
+              ${p.capabilities.map(c => `<span class="plugin-tag">${escapeHtml(c)}</span>`).join('')}
+              ${p.isExternal ? '<span class="plugin-tag external">External</span>' : ''}
+            </div>
+            <div class="plugin-actions">
+              ${p.status === 'active' 
+                ? `<button class="plugin-btn disable" onclick="togglePlugin('${p.id}', 'disable')">Disable</button>`
+                : `<button class="plugin-btn enable" onclick="togglePlugin('${p.id}', 'enable')">Enable</button>`}
+              ${p.isExternal ? `<button class="plugin-btn delete" onclick="deletePlugin('${p.id}')">Delete</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        document.getElementById('pluginGrid').innerHTML = `<p style="color:var(--error)">Error loading plugins: ${err.message}</p>`;
+      }
+    }
+    
+    async function togglePlugin(id, action) {
+      try {
+        await fetch(`${API}/plugins/${id}/${action}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        loadPlugins();
+      } catch (err) { alert('Error: ' + err.message); }
+    }
+    
+    async function deletePlugin(id) {
+      if (!confirm('Delete this plugin?')) return;
+      try {
+        await fetch(`${API}/plugins/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        loadPlugins();
+      } catch (err) { alert('Error: ' + err.message); }
+    }
+    
+    function showAddPluginModal() {
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.id = 'addPluginModal';
+      modal.innerHTML = `
+        <div class="modal">
+          <h3>Install External Plugin</h3>
+          <label>Plugin Name</label>
+          <input type="text" id="pluginName" placeholder="My Custom Plugin">
+          <label>Description</label>
+          <textarea id="pluginDesc" placeholder="What does this plugin do?"></textarea>
+          <label>Repository URL (optional)</label>
+          <input type="text" id="pluginRepo" placeholder="https://github.com/user/repo">
+          <label>Capabilities (comma-separated)</label>
+          <input type="text" id="pluginCaps" placeholder="chat, search, analysis">
+          <label>Type</label>
+          <select id="pluginType">
+            <option value="capability">Capability</option>
+            <option value="integration">Integration</option>
+            <option value="tool">Tool</option>
+          </select>
+          <div class="modal-actions">
+            <button class="modal-btn secondary" onclick="document.getElementById('addPluginModal').remove()">Cancel</button>
+            <button class="modal-btn primary" onclick="installPlugin()">Install</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+    
+    async function installPlugin() {
+      const name = document.getElementById('pluginName').value.trim();
+      const description = document.getElementById('pluginDesc').value.trim();
+      const repoUrl = document.getElementById('pluginRepo').value.trim();
+      const capabilities = document.getElementById('pluginCaps').value.split(',').map(c => c.trim()).filter(c => c);
+      const type = document.getElementById('pluginType').value;
+      
+      if (!name || !description) { alert('Name and description required'); return; }
+      
+      try {
+        const res = await fetch(`${API}/plugins`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description, repoUrl, capabilities, type, author: user.email })
+        });
+        const data = await res.json();
+        if (data.id) {
+          document.getElementById('addPluginModal').remove();
+          loadPlugins();
+        } else {
+          alert(data.error || 'Failed to install plugin');
+        }
+      } catch (err) { alert('Error: ' + err.message); }
+    }
+    
     if (token && user) {
       document.getElementById('authOverlay').style.display = 'none';
       updateUserUI();

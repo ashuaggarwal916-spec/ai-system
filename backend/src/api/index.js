@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-export function apiRouter({ auth, brain, agents, tasks, memory, registry }) {
+export function apiRouter({ auth, brain, agents, tasks, memory, registry, plugins }) {
   const router = Router();
 
   // Auth routes
@@ -127,6 +127,42 @@ export function apiRouter({ auth, brain, agents, tasks, memory, registry }) {
     } catch (err) {
       res.json({ error: err.message });
     }
+  });
+
+  // Plugin routes
+  router.get('/plugins', auth.authMiddleware, (req, res) => {
+    const filter = {};
+    if (req.query.type) filter.type = req.query.type;
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.capability) filter.capability = req.query.capability;
+    if (req.query.external) filter.isExternal = req.query.external === 'true';
+    res.json(plugins.listPlugins(filter));
+  });
+
+  router.post('/plugins', auth.authMiddleware, auth.requireRole('admin'), (req, res) => {
+    const { name, description, repoUrl, capabilities, type, author } = req.body;
+    if (!name || !description) {
+      return res.status(400).json({ error: 'Name and description required' });
+    }
+    const plugin = plugins.installExternalPlugin({ name, description, repoUrl, capabilities, type, author });
+    res.json(plugin);
+  });
+
+  router.get('/plugins/stats', auth.authMiddleware, (req, res) => {
+    res.json(plugins.getStats());
+  });
+
+  router.post('/plugins/:id/enable', auth.authMiddleware, auth.requireRole('admin'), (req, res) => {
+    res.json(plugins.enablePlugin(req.params.id));
+  });
+
+  router.post('/plugins/:id/disable', auth.authMiddleware, auth.requireRole('admin'), (req, res) => {
+    res.json(plugins.disablePlugin(req.params.id));
+  });
+
+  router.delete('/plugins/:id', auth.authMiddleware, auth.requireRole('admin'), (req, res) => {
+    const result = plugins.uninstallPlugin(req.params.id);
+    res.json(result);
   });
 
   return router;
