@@ -70,10 +70,18 @@ async function main() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
   
-  // Serve frontend in production
-  if (process.env.NODE_ENV === 'production') {
-    app.use(express.static('../frontend/dist'));
-  }
+  // Serve frontend
+  app.use(express.static('../frontend'));
+  
+  // Fallback to index.html for client-side routing
+  app.get('*', (req, res) => {
+    res.sendFile('index.html', { root: '../frontend' });
+  });
+  
+  // Comment out production-only serving
+  // if (process.env.NODE_ENV === 'production') {
+  //   app.use(express.static('../frontend/dist'));
+  // }
   
   server.listen(PORT, () => {
     console.log(`✅ AI System running on http://localhost:${PORT}`);

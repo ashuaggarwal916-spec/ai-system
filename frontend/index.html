@@ -3,515 +3,903 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI System — Agent Hub</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>AI System — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;510;590;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>p5.disableFriendlyErrors = true;</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-feature-settings: 'cv01', 'ss03'; }
+    
     :root {
-      --bg-primary: #0a0a0f;
-      --bg-secondary: #12121a;
-      --bg-tertiary: #1a1a25;
-      --bg-hover: #222230;
-      --border: #2a2a3a;
-      --text-primary: #e8e8f0;
-      --text-secondary: #a0a0b0;
-      --text-muted: #606070;
-      --accent: #8b5cf6;
-      --accent-hover: #7c3aed;
-      --success: #10b981;
+      --bg-canvas: #010102;
+      --bg-primary: #08090a;
+      --bg-secondary: #0f1011;
+      --bg-tertiary: #191a1b;
+      --bg-elevated: #28282c;
+      --bg-hover: rgba(255,255,255,0.04);
+      --text-primary: #f7f8f8;
+      --text-secondary: #d0d6e0;
+      --text-tertiary: #8a8f98;
+      --text-quaternary: #62666d;
+      --accent: #5e6ad2;
+      --accent-hover: #7170ff;
+      --accent-active: #828fff;
+      --border-subtle: rgba(255,255,255,0.05);
+      --border-standard: rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.12);
+      --success: #27a644;
       --warning: #f59e0b;
       --error: #ef4444;
-      --user-bubble: #1e1e2e;
+      --font: 'Inter', -apple-system, system-ui, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-xl: 12px;
     }
-    body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; overflow: hidden; }
-    .app { display: flex; height: 100vh; }
+    
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    /* 3D Background Canvas */
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      opacity: 0.6;
+    }
+    
+    /* App Layout */
+    .app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      height: 100vh;
+      backdrop-filter: blur(0px);
+    }
     
     /* Sidebar */
-    .sidebar { width: 260px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
-    .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
-    .new-chat-btn { width: 100%; padding: 10px 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-    .new-chat-btn:hover { background: var(--accent-hover); }
-    .sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 8px; }
-    .nav-section { margin-bottom: 16px; }
-    .nav-section-title { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; margin-bottom: 4px; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); transition: all 0.15s; margin-bottom: 2px; }
-    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
-    .nav-item.active { background: var(--bg-tertiary); color: var(--text-primary); }
-    .nav-item-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
-    .sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
-    .user-info { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: pointer; }
-    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: white; }
-    .user-name { font-size: 13px; font-weight: 500; }
-    .user-email { font-size: 11px; color: var(--text-muted); }
+    .sidebar {
+      width: 248px;
+      background: rgba(15, 16, 17, 0.85);
+      backdrop-filter: blur(12px);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
     
-    /* Main */
-    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-    .header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .sidebar-header {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .new-chat-btn {
+      width: 100%;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-standard);
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 510;
+      font-family: var(--font);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+    
+    .new-chat-btn:hover {
+      background: rgba(255,255,255,0.06);
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+    
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    
+    .nav-section { margin-bottom: 16px; }
+    
+    .nav-section-title {
+      font-size: 10px;
+      font-weight: 510;
+      color: var(--text-quaternary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 8px;
+      margin-bottom: 2px;
+    }
+    
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+      transition: all 0.1s ease;
+      margin-bottom: 1px;
+    }
+    
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: rgba(94, 106, 210, 0.08); color: var(--accent); }
+    .nav-item-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    
+    .sidebar-footer {
+      padding: 8px;
+      border-top: 1px solid var(--border-subtle);
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+    
+    .user-info:hover { background: var(--bg-hover); }
+    
+    .user-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 590;
+      color: white;
+    }
+    
+    .user-name { font-size: 12px; font-weight: 510; color: var(--text-primary); }
+    .user-email { font-size: 10px; color: var(--text-quaternary); }
+    
+    /* Main Content */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+    
+    .header {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+      background: rgba(8, 9, 10, 0.6);
+      backdrop-filter: blur(8px);
+    }
+    
     .header-left { display: flex; align-items: center; gap: 12px; }
-    .header-title { font-size: 16px; font-weight: 600; }
-    .header-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; background: rgba(139, 92, 246, 0.15); color: var(--accent); }
+    .header-title { font-size: 14px; font-weight: 590; letter-spacing: -0.24px; }
+    .header-badge {
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-size: 10px;
+      font-weight: 510;
+      background: rgba(94, 106, 210, 0.12);
+      color: var(--accent);
+      font-family: var(--mono);
+    }
+    
     .header-right { display: flex; align-items: center; gap: 8px; }
-    .header-btn { width: 32px; height: 32px; border: none; background: transparent; color: var(--text-secondary); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .header-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      color: var(--text-tertiary);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+    }
     .header-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
     
-    /* Content */
-    .content { flex: 1; overflow-y: auto; padding: 20px; }
+    /* Dashboard Content */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
     
-    /* Chat */
-    .chat-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 40px; }
-    .chat-empty h1 { font-size: 32px; font-weight: 700; margin-bottom: 12px; background: linear-gradient(135deg, var(--accent), #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .chat-empty p { color: var(--text-muted); font-size: 15px; max-width: 500px; line-height: 1.6; }
+    .dashboard {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      gap: 24px;
+    }
     
-    /* Messages */
-    .message { max-width: 760px; margin: 0 auto; padding: 16px 0; display: flex; gap: 16px; }
-    .message-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
-    .message.user .message-avatar { background: #3b82f6; }
-    .message.assistant .message-avatar { background: var(--accent); }
-    .message-content { flex: 1; min-width: 0; }
-    .message-role { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
-    .message-time { font-size: 11px; color: var(--text-muted); font-weight: 400; }
-    .message-text { font-size: 14px; line-height: 1.7; color: var(--text-primary); white-space: pre-wrap; word-wrap: break-word; }
+    /* Stats Row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
     
-    /* Input */
-    .input-area { flex-shrink: 0; padding: 16px 20px 20px; background: linear-gradient(transparent, var(--bg-primary) 30%); }
-    .input-wrapper { max-width: 760px; margin: 0 auto; }
-    .input-container { display: flex; align-items: flex-end; gap: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
-    .input-container:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-    .input-field { flex: 1; background: transparent; border: none; outline: none; color: var(--text-primary); font-size: 14px; font-family: inherit; resize: none; max-height: 200px; min-height: 24px; line-height: 1.5; padding: 4px 0; }
-    .input-field::placeholder { color: var(--text-muted); }
-    .input-btn { width: 32px; height: 32px; border: none; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .input-btn.send { background: var(--accent); color: white; }
-    .input-btn.send:hover { background: var(--accent-hover); }
-    .input-btn.send:disabled { background: var(--bg-hover); color: var(--text-muted); cursor: not-allowed; }
-    .input-footer { text-align: center; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+    .stat-card {
+      background: rgba(25, 26, 27, 0.6);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-standard);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      transition: all 0.15s ease;
+    }
     
-    /* Status */
-    .status-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border); }
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+    .stat-card:hover {
+      border-color: var(--border-strong);
+      background: rgba(25, 26, 27, 0.8);
+    }
     
-    /* Auth */
-    .auth-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px); }
-    .auth-modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 32px; width: 100%; max-width: 380px; }
-    .auth-modal h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
-    .auth-modal p { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
-    .auth-input { width: 100%; padding: 10px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 14px; margin-bottom: 12px; outline: none; }
-    .auth-input:focus { border-color: var(--accent); }
-    .auth-btn { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px; }
-    .auth-btn:hover { background: var(--accent-hover); }
-    .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-muted); }
-    .auth-switch a { color: var(--accent); cursor: pointer; }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+    }
     
-    /* Typing */
-    .typing-indicator { display: flex; gap: 4px; padding: 4px 0; }
-    .typing-indicator span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: typing 1.4s infinite; }
-    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 590;
+      color: var(--text-primary);
+      font-family: var(--mono);
+      letter-spacing: -0.5px;
+    }
+    
+    .stat-change {
+      font-size: 11px;
+      color: var(--success);
+      margin-top: 4px;
+      font-family: var(--mono);
+    }
+    
+    /* Dashboard Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+    
+    @media (max-width: 900px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+    
+    /* Card */
+    .card {
+      background: rgba(25, 26, 27, 0.6);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-standard);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .card-title {
+      font-size: 13px;
+      font-weight: 510;
+      color: var(--text-primary);
+    }
+    
+    .card-action {
+      font-size: 11px;
+      color: var(--accent);
+      cursor: pointer;
+      font-family: var(--mono);
+    }
+    
+    .card-action:hover { color: var(--accent-hover); }
+    
+    .card-body {
+      padding: 16px;
+      min-height: 200px;
+    }
+    
+    /* Activity Feed */
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .activity-item:last-child { border-bottom: none; }
+    
+    .activity-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+    
+    .activity-dot.warning { background: var(--warning); }
+    .activity-dot.error { background: var(--error); }
+    .activity-dot.info { background: var(--accent); }
+    
+    .activity-text {
+      flex: 1;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    
+    .activity-time {
+      font-size: 10px;
+      color: var(--text-quaternary);
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+    
+    /* Model Status */
+    .model-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .model-row:last-child { border-bottom: none; }
+    
+    .model-name {
+      font-size: 12px;
+      font-weight: 510;
+      color: var(--text-primary);
+    }
+    
+    .model-provider {
+      font-size: 10px;
+      color: var(--text-quaternary);
+      font-family: var(--mono);
+    }
+    
+    .model-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-family: var(--mono);
+    }
+    
+    .model-status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+    
+    .model-status-dot.active { background: var(--success); }
+    .model-status-dot.standby { background: var(--warning); }
+    
+    /* Quick Actions */
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    
+    .quick-action {
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-standard);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.1s ease;
+      text-align: left;
+    }
+    
+    .quick-action:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border-strong);
+    }
+    
+    .quick-action-icon {
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    
+    .quick-action-label {
+      font-size: 11px;
+      font-weight: 510;
+      color: var(--text-secondary);
+    }
+    
+    /* Status Bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px;
+      font-size: 10px;
+      color: var(--text-quaternary);
+      border-top: 1px solid var(--border-subtle);
+      font-family: var(--mono);
+      background: rgba(8, 9, 10, 0.6);
+      backdrop-filter: blur(8px);
+    }
+    
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
     
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    
-    /* Page views */
-    .page { max-width: 900px; margin: 0 auto; padding: 20px; }
-    .page h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-    .page-desc { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
-    
-    /* Plugins */
-    .plugins-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-    .plugins-stats { display: flex; gap: 16px; }
-    .stat-card { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; text-align: center; min-width: 80px; }
-    .stat-value { font-size: 20px; font-weight: 700; color: var(--accent); }
-    .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
-    
-    .add-plugin-btn { padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-    .add-plugin-btn:hover { background: var(--accent-hover); }
-    
-    .plugin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-    .plugin-card { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: all 0.15s; }
-    .plugin-card:hover { border-color: var(--accent); transform: translateY(-1px); }
-    .plugin-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-    .plugin-name { font-size: 14px; font-weight: 600; }
-    .plugin-version { font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; }
-    .plugin-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; }
-    .plugin-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
-    .plugin-tag { font-size: 11px; padding: 3px 8px; background: rgba(139, 92, 246, 0.1); color: var(--accent); border-radius: 4px; }
-    .plugin-tag.external { background: rgba(16, 185, 129, 0.1); color: var(--success); }
-    .plugin-actions { display: flex; gap: 6px; }
-    .plugin-btn { padding: 5px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; border: none; font-weight: 500; }
-    .plugin-btn.enable { background: var(--success); color: white; }
-    .plugin-btn.disable { background: var(--warning); color: white; }
-    .plugin-btn.delete { background: var(--error); color: white; }
-    .plugin-btn.install { background: var(--accent); color: white; }
-    
-    /* Modal */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(4px); }
-    .modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; max-height: 80vh; overflow-y: auto; }
-    .modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
-    .modal label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; margin-top: 12px; }
-    .modal input, .modal textarea, .modal select { width: 100%; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; }
-    .modal textarea { min-height: 60px; resize: vertical; }
-    .modal input:focus, .modal textarea:focus { border-color: var(--accent); }
-    .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
-    .modal-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
-    .modal-btn.primary { background: var(--accent); color: white; }
-    .modal-btn.secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
-    
-    @media (max-width: 768px) {
-      .sidebar { display: none; }
-      .plugin-grid { grid-template-columns: 1fr; }
-    }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
   </style>
 </head>
 <body>
-  <div class="auth-overlay" id="authOverlay" style="display: none;">
-    <div class="auth-modal">
-      <h2 id="authTitle">Welcome back</h2>
-      <p id="authSubtitle">Sign in to continue to AI System</p>
-      <input type="email" class="auth-input" id="authEmail" placeholder="Email">
-      <input type="password" class="auth-input" id="authPassword" placeholder="Password">
-      <button class="auth-btn" onclick="handleAuth()" id="authBtn">Sign in</button>
-      <p class="auth-switch" id="authSwitch">Don't have an account? <a onclick="toggleAuthMode()">Sign up</a></p>
-    </div>
-  </div>
-
-  <div class="app" id="app">
+  <!-- 3D Background -->
+  <div id="bg-canvas"></div>
+  
+  <div class="app">
+    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <button class="new-chat-btn" onclick="newChat()">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <button class="new-chat-btn" onclick="location.href='/'">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
           New Chat
         </button>
       </div>
+      
       <nav class="sidebar-nav">
         <div class="nav-section">
-          <div class="nav-section-title">Navigation</div>
-          <div class="nav-item active" onclick="showView('chat')"><span class="nav-item-icon">💬</span> Chat</div>
-          <div class="nav-item" onclick="showView('plugins')"><span class="nav-item-icon">🧩</span> Plugins</div>
-          <div class="nav-item" onclick="showView('agents')"><span class="nav-item-icon">🤖</span> Agents</div>
-          <div class="nav-item" onclick="showView('tasks')"><span class="nav-item-icon">📋</span> Tasks</div>
+          <div class="nav-section-title">Platform</div>
+          <div class="nav-item active" onclick="scrollToSection('dashboard')">
+            <span class="nav-item-icon">📊</span> Dashboard
+          </div>
+          <div class="nav-item" onclick="scrollToSection('plugins')">
+            <span class="nav-item-icon">🧩</span> Plugins
+          </div>
+          <div class="nav-item" onclick="scrollToSection('agents')">
+            <span class="nav-item-icon">🤖</span> Agents
+          </div>
+          <div class="nav-item" onclick="scrollToSection('models')">
+            <span class="nav-item-icon">⚡</span> Models
+          </div>
         </div>
+        
         <div class="nav-section">
           <div class="nav-section-title">System</div>
-          <div class="nav-item" onclick="showView('models')"><span class="nav-item-icon">🌐</span> Models</div>
-          <div class="nav-item" onclick="showView('memory')"><span class="nav-item-icon">🧠</span> Memory</div>
-          <div class="nav-item" onclick="showView('resources')"><span class="nav-item-icon">⚡</span> Resources</div>
+          <div class="nav-item" onclick="scrollToSection('tasks')">
+            <span class="nav-item-icon">📋</span> Tasks
+          </div>
+          <div class="nav-item" onclick="scrollToSection('memory')">
+            <span class="nav-item-icon">🧠</span> Memory
+          </div>
+          <div class="nav-item" onclick="scrollToSection('resources')">
+            <span class="nav-item-icon">📁</span> Resources
+          </div>
         </div>
       </nav>
+      
       <div class="sidebar-footer">
-        <div class="user-info" onclick="showView('settings')">
-          <div class="user-avatar" id="userAvatar">U</div>
-          <div class="user-details">
-            <div class="user-name" id="userName">User</div>
-            <div class="user-email" id="userEmail">user@example.com</div>
+        <div class="user-info">
+          <div class="user-avatar">U</div>
+          <div>
+            <div class="user-name">Admin</div>
+            <div class="user-email">admin@ai.system</div>
           </div>
         </div>
       </div>
     </aside>
     
+    <!-- Main Content -->
     <main class="main">
       <header class="header">
         <div class="header-left">
-          <span class="header-title">AI Agent Hub</span>
-          <span class="header-badge" id="modelBadge">auto</span>
+          <span class="header-title">AI System</span>
+          <span class="header-badge">v2.0</span>
         </div>
         <div class="header-right">
-          <button class="header-btn" onclick="showView('settings')" title="Settings">⚙</button>
+          <button class="header-btn" title="Toggle 3D" onclick="toggle3D()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </button>
+          <button class="header-btn" title="Settings">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
         </div>
       </header>
       
-      <div class="content" id="contentContainer">
-        <div class="chat-empty" id="chatEmpty">
-          <h1>AI System</h1>
-          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy.</p>
-        </div>
-      </div>
-      
-      <div class="input-area">
-        <div class="input-wrapper">
-          <div class="input-container">
-            <textarea class="input-field" id="messageInput" placeholder="Send a message..." rows="1" onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
-            <button class="input-btn send" id="sendBtn" onclick="sendMessage()" disabled>
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
+      <div class="content">
+        <div class="dashboard" id="dashboard">
+          <!-- Stats Row -->
+          <div class="stats-row" id="stats-row">
+            <div class="stat-card">
+              <div class="stat-label">Total Agents</div>
+              <div class="stat-value" id="stat-agents">11</div>
+              <div class="stat-change">+3 this week</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Active Tasks</div>
+              <div class="stat-value" id="stat-tasks">7</div>
+              <div class="stat-change">2 running</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Plugins</div>
+              <div class="stat-value" id="stat-plugins">10</div>
+              <div class="stat-change">10 active</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Tokens Used</div>
+              <div class="stat-value" id="stat-tokens">0</div>
+              <div class="stat-change">Kira AI</div>
+            </div>
           </div>
-          <div class="input-footer">AI System can make mistakes. Important information should be verified.</div>
+          
+          <!-- Dashboard Grid -->
+          <div class="dashboard-grid">
+            <!-- Activity Feed -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Activity Feed</span>
+                <span class="card-action">View all</span>
+              </div>
+              <div class="card-body" id="activity-feed">
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div class="activity-text">System initialized — 11 agents registered</div>
+                  <div class="activity-time">Just now</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot info"></div>
+                  <div class="activity-text">Model gateway connected — Kira AI primary</div>
+                  <div class="activity-time">1m ago</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div class="activity-text">Plugin system loaded — 10 capabilities</div>
+                  <div class="activity-time">2m ago</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div class="activity-text">OpenRouter standby — needs sk-or- key</div>
+                  <div class="activity-time">5m ago</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div class="activity-text">Skill engine ready — 31 workflows</div>
+                  <div class="activity-time">10m ago</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Right Column -->
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+              <!-- Model Status -->
+              <div class="card">
+                <div class="card-header">
+                  <span class="card-title">Model Gateway</span>
+                  <span class="card-action">5 providers</span>
+                </div>
+                <div class="card-body" id="model-status">
+                  <div class="model-row">
+                    <div>
+                      <div class="model-name">Kira AI</div>
+                      <div class="model-provider">80M tokens/mo</div>
+                    </div>
+                    <div class="model-status">
+                      <div class="model-status-dot active"></div>
+                      <span style="color: var(--success)">Active</span>
+                    </div>
+                  </div>
+                  <div class="model-row">
+                    <div>
+                      <div class="model-name">OpenRouter</div>
+                      <div class="model-provider">1.5B tokens/mo</div>
+                    </div>
+                    <div class="model-status">
+                      <div class="model-status-dot standby"></div>
+                      <span style="color: var(--warning)">Standby</span>
+                    </div>
+                  </div>
+                  <div class="model-row">
+                    <div>
+                      <div class="model-name">Free Claude</div>
+                      <div class="model-provider">1.3B tokens/mo</div>
+                    </div>
+                    <div class="model-status">
+                      <div class="model-status-dot standby"></div>
+                      <span style="color: var(--warning)">Standby</span>
+                    </div>
+                  </div>
+                  <div class="model-row">
+                    <div>
+                      <div class="model-name">OmniRoute</div>
+                      <div class="model-provider">1.47B tokens/mo</div>
+                    </div>
+                    <div class="model-status">
+                      <div class="model-status-dot standby"></div>
+                      <span style="color: var(--warning)">Standby</span>
+                    </div>
+                  </div>
+                  <div class="model-row">
+                    <div>
+                      <div class="model-name">FreeLLMAPI</div>
+                      <div class="model-provider">7.4B tokens/mo</div>
+                    </div>
+                    <div class="model-status">
+                      <div class="model-status-dot standby"></div>
+                      <span style="color: var(--warning)">Standby</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Quick Actions -->
+              <div class="card">
+                <div class="card-header">
+                  <span class="card-title">Quick Actions</span>
+                </div>
+                <div class="card-body">
+                  <div class="quick-actions">
+                    <div class="quick-action">
+                      <div class="quick-action-icon">📦</div>
+                      <div class="quick-action-label">Build</div>
+                    </div>
+                    <div class="quick-action">
+                      <div class="quick-action-icon">🔍</div>
+                      <div class="quick-action-label">Research</div>
+                    </div>
+                    <div class="quick-action">
+                      <div class="quick-action-icon">🎬</div>
+                      <div class="quick-action-label">Video</div>
+                    </div>
+                    <div class="quick-action">
+                      <div class="quick-action-icon">🚀</div>
+                      <div class="quick-action-label">Deploy</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       
       <div class="status-bar">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Ready</span>
+        <span class="status-dot"></span>
+        <span>Ready</span>
         <span>•</span>
-        <span id="providerInfo">Provider: Kira AI</span>
+        <span>Provider: Kira AI</span>
         <span>•</span>
-        <span id="tokenUsage">Tokens: 0</span>
+        <span>Tokens: 0</span>
+        <span>•</span>
+        <span id="3d-status">3D: ON</span>
       </div>
     </main>
   </div>
-
+  
   <script>
-    const API = 'http://localhost:3000/api';
-    let token = localStorage.getItem('token');
-    let user = JSON.parse(localStorage.getItem('user') || 'null');
-    let currentView = 'chat';
-    let isLoading = false;
+    // === Live 3D Background ===
+    let bgVisible = true;
     
-    function toggleAuthMode() {
-      const isLogin = document.getElementById('authBtn').textContent === 'Sign in';
-      document.getElementById('authTitle').textContent = isLogin ? 'Create account' : 'Welcome back';
-      document.getElementById('authSubtitle').textContent = isLogin ? 'Sign up for AI System' : 'Sign in to continue to AI System';
-      document.getElementById('authBtn').textContent = isLogin ? 'Sign up' : 'Sign in';
-      document.getElementById('authSwitch').innerHTML = isLogin ? 'Already have an account? <a onclick="toggleAuthMode()">Sign in</a>' : 'Don\'t have an account? <a onclick="toggleAuthMode()">Sign up</a>';
+    function toggle3D() {
+      bgVisible = !bgVisible;
+      const canvas = document.getElementById('bg-canvas');
+      canvas.style.display = bgVisible ? 'block' : 'none';
+      document.getElementById('3d-status').textContent = '3D: ' + (bgVisible ? 'ON' : 'OFF');
     }
     
-    async function handleAuth() {
-      const email = document.getElementById('authEmail').value;
-      const password = document.getElementById('authPassword').value;
-      const isLogin = document.getElementById('authBtn').textContent === 'Sign in';
-      try {
-        const res = await fetch(`${API}/auth/${isLogin ? 'login' : 'register'}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-        if (data.success) {
-          token = data.token;
-          user = data.user;
-          localStorage.setItem('token', token);
-          localStorage.setItem('user', JSON.stringify(user));
-          document.getElementById('authOverlay').style.display = 'none';
-          updateUserUI();
-        } else {
-          alert(data.error || 'Auth failed');
+    // p5.js 3D Particle Field
+    const sketch = (p) => {
+      let particles = [];
+      let particleCount = 80;
+      let noiseScale = 0.005;
+      let time = 0;
+      
+      p.setup = function() {
+        const canvas = p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
+        canvas.parent('bg-canvas');
+        p.pixelDensity(1);
+        
+        // Initialize particles in 3D space
+        for (let i = 0; i < particleCount; i++) {
+          particles.push({
+            x: p.random(-400, 400),
+            y: p.random(-300, 300),
+            z: p.random(-400, 400),
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            size: p.random(1, 3),
+            hue: p.random(240, 280) // Blue-violet range
+          });
         }
-      } catch (err) { alert('Error: ' + err.message); }
-    }
-    
-    function updateUserUI() {
-      if (user) {
-        document.getElementById('userName').textContent = user.email.split('@')[0];
-        document.getElementById('userEmail').textContent = user.email;
-        document.getElementById('userAvatar').textContent = user.email[0].toUpperCase();
-      }
-    }
-    
-    function newChat() {
-      document.getElementById('contentContainer').innerHTML = `
-        <div class="chat-empty" id="chatEmpty">
-          <h1>AI System</h1>
-          <p>Your multi-user AI agent operating system. Ask me to build, research, create, deploy.</p>
-        </div>`;
-    }
-    
-    async function sendMessage() {
-      const input = document.getElementById('messageInput');
-      const message = input.value.trim();
-      if (!message || isLoading) return;
+      };
       
-      isLoading = true;
-      document.getElementById('sendBtn').disabled = true;
-      document.getElementById('statusText').textContent = 'Thinking...';
-      document.getElementById('contentContainer').innerHTML += `
-        <div class="message user"><div class="message-avatar">${user.email[0].toUpperCase()}</div><div class="message-content"><div class="message-role">You</div><div class="message-text">${escapeHtml(message)}</div></div></div>
-        <div class="message assistant"><div class="message-avatar">AI</div><div class="message-content"><div class="message-role">Assistant</div><div class="typing-indicator"><span></span><span></span><span></span></div></div></div>
-      `;
-      input.value = '';
-      input.style.height = 'auto';
-      
-      try {
-        const res = await fetch(`${API}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ message })
-        });
-        const data = await res.json();
-        document.querySelector('.typing-indicator').closest('.message').remove();
-        document.getElementById('contentContainer').innerHTML += `
-          <div class="message assistant"><div class="message-avatar">AI</div><div class="message-content"><div class="message-role">Assistant</div><div class="message-text">${escapeHtml(data.content || data.error || JSON.stringify(data))}</div></div></div>
-        `;
-        if (data.usage) document.getElementById('tokenUsage').textContent = `Tokens: ${data.usage.total_tokens || 0}`;
-      } catch (err) {
-        document.querySelector('.typing-indicator').closest('.message').remove();
-        document.getElementById('contentContainer').innerHTML += `<div class="message assistant"><div class="message-avatar">AI</div><div class="message-content"><div class="message-text" style="color:var(--error)">Error: ${err.message}</div></div></div>`;
-      }
-      
-      isLoading = false;
-      document.getElementById('sendBtn').disabled = false;
-      document.getElementById('statusText').textContent = 'Ready';
-      document.getElementById('contentContainer').scrollTop = document.getElementById('contentContainer').scrollHeight;
-    }
-    
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-    
-    function autoResize(textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-      document.getElementById('sendBtn').disabled = !textarea.value.trim();
-    }
-    
-    function handleKeyDown(e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    }
-    
-    async function showView(view) {
-      currentView = view;
-      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-      event.target.closest('.nav-item')?.classList.add('active');
-      
-      const container = document.getElementById('contentContainer');
-      
-      if (view === 'chat') { newChat(); return; }
-      
-      if (view === 'plugins') {
-        container.innerHTML = `<div class="page"><h1>Plugins</h1><p class="page-desc">Manage capabilities and install external plugins</p><div class="plugins-header"><div class="plugins-stats" id="pluginStats"></div><button class="add-plugin-btn" onclick="showAddPluginModal()">+ Add Plugin</button></div><div id="pluginGrid" class="plugin-grid"></div></div>`;
-        loadPlugins();
-        return;
-      }
-      
-      container.innerHTML = `<div class="page"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><p style="color:var(--text-muted)">Loading...</p></div>`;
-      
-      const endpoints = { tasks: '/tasks', agents: '/agents', resources: '/resources', models: '/models', memory: '/memory' };
-      if (endpoints[view]) {
-        fetch(`${API}${endpoints[view]}`, { headers: { 'Authorization': `Bearer ${token}` } })
-          .then(r => r.json())
-          .then(data => {
-            if (Array.isArray(data)) {
-              container.innerHTML = `<div class="page"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">${data.map(item => `<div class="plugin-card"><div class="plugin-name">${escapeHtml(item.name || item.title || item.id)}</div><div class="plugin-desc">${escapeHtml(item.description || item.type || item.status || '')}</div></div>`).join('')}</div></div>`;
-            } else {
-              container.innerHTML = `<div class="page"><h2>${view.charAt(0).toUpperCase() + view.slice(1)}</h2><pre style="background:var(--bg-tertiary);padding:16px;border-radius:8px;overflow:auto;font-size:12px;">${escapeHtml(JSON.stringify(data, null, 2))}</pre></div>`;
+      p.draw = function() {
+        p.background(8, 9, 10, 0); // Transparent background
+        
+        // Subtle rotation
+        p.rotateX(time * 0.05);
+        p.rotateY(time * 0.03);
+        
+        // Update and draw particles
+        for (let i = 0; i < particles.length; i++) {
+          const part = particles[i];
+          
+          // Noise-based movement
+          const angle = p.noise(part.x * noiseScale, part.y * noiseScale, time * 0.1) * p.TWO_PI;
+          const angle2 = p.noise(part.y * noiseScale, part.z * noiseScale, time * 0.1) * p.TWO_PI;
+          
+          part.vx += Math.cos(angle) * 0.05;
+          part.vy += Math.sin(angle2) * 0.05;
+          part.vz += Math.cos(angle2) * 0.05;
+          
+          // Damping
+          part.vx *= 0.95;
+          part.vy *= 0.95;
+          part.vz *= 0.95;
+          
+          // Update position
+          part.x += part.vx;
+          part.y += part.vy;
+          part.z += part.vz;
+          
+          // Boundary wrap
+          if (Math.abs(part.x) > 500) part.vx *= -1;
+          if (Math.abs(part.y) > 400) part.vy *= -1;
+          if (Math.abs(part.z) > 500) part.vz *= -1;
+          
+          // Draw particle
+          p.push();
+          p.translate(part.x, part.y, part.z);
+          
+          // Color based on depth
+          const alpha = p.map(Math.abs(part.z), 0, 500, 150, 30);
+          p.fill(140, 150, 220, alpha);
+          p.noStroke();
+          p.sphere(part.size);
+          p.pop();
+        }
+        
+        // Draw connections between close particles
+        p.stroke(94, 106, 210, 15);
+        p.strokeWeight(0.5);
+        p.noFill();
+        
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dz = particles[i].z - particles[j].z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            
+            if (dist < 100) {
+              p.line(particles[i].x, particles[i].y, particles[i].z,
+                     particles[j].x, particles[j].y, particles[j].z);
             }
-          })
-          .catch(err => { container.innerHTML = `<div class="page"><h2>Error</h2><p>${err.message}</p></div>`; });
-      }
-    }
-    
-    async function loadPlugins() {
-      try {
-        const res = await fetch(`${API}/plugins`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const plugins = await res.json();
-        const statsRes = await fetch(`${API}/plugins/stats`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const stats = await statsRes.json();
-        
-        document.getElementById('pluginStats').innerHTML = `
-          <div class="stat-card"><div class="stat-value">${stats.total}</div><div class="stat-label">Total</div></div>
-          <div class="stat-card"><div class="stat-value">${stats.active}</div><div class="stat-label">Active</div></div>
-          <div class="stat-card"><div class="stat-value">${stats.external}</div><div class="stat-label">External</div></div>
-        `;
-        
-        document.getElementById('pluginGrid').innerHTML = plugins.map(p => `
-          <div class="plugin-card">
-            <div class="plugin-card-header">
-              <span class="plugin-name">${escapeHtml(p.name)}</span>
-              <span class="plugin-version">v${p.version}</span>
-            </div>
-            <div class="plugin-desc">${escapeHtml(p.description)}</div>
-            <div class="plugin-tags">
-              ${p.capabilities.map(c => `<span class="plugin-tag">${escapeHtml(c)}</span>`).join('')}
-              ${p.isExternal ? '<span class="plugin-tag external">External</span>' : ''}
-            </div>
-            <div class="plugin-actions">
-              ${p.status === 'active' 
-                ? `<button class="plugin-btn disable" onclick="togglePlugin('${p.id}', 'disable')">Disable</button>`
-                : `<button class="plugin-btn enable" onclick="togglePlugin('${p.id}', 'enable')">Enable</button>`}
-              ${p.isExternal ? `<button class="plugin-btn delete" onclick="deletePlugin('${p.id}')">Delete</button>` : ''}
-            </div>
-          </div>
-        `).join('');
-      } catch (err) {
-        document.getElementById('pluginGrid').innerHTML = `<p style="color:var(--error)">Error loading plugins: ${err.message}</p>`;
-      }
-    }
-    
-    async function togglePlugin(id, action) {
-      try {
-        await fetch(`${API}/plugins/${id}/${action}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        loadPlugins();
-      } catch (err) { alert('Error: ' + err.message); }
-    }
-    
-    async function deletePlugin(id) {
-      if (!confirm('Delete this plugin?')) return;
-      try {
-        await fetch(`${API}/plugins/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        loadPlugins();
-      } catch (err) { alert('Error: ' + err.message); }
-    }
-    
-    function showAddPluginModal() {
-      const modal = document.createElement('div');
-      modal.className = 'modal-overlay';
-      modal.id = 'addPluginModal';
-      modal.innerHTML = `
-        <div class="modal">
-          <h3>Install External Plugin</h3>
-          <label>Plugin Name</label>
-          <input type="text" id="pluginName" placeholder="My Custom Plugin">
-          <label>Description</label>
-          <textarea id="pluginDesc" placeholder="What does this plugin do?"></textarea>
-          <label>Repository URL (optional)</label>
-          <input type="text" id="pluginRepo" placeholder="https://github.com/user/repo">
-          <label>Capabilities (comma-separated)</label>
-          <input type="text" id="pluginCaps" placeholder="chat, search, analysis">
-          <label>Type</label>
-          <select id="pluginType">
-            <option value="capability">Capability</option>
-            <option value="integration">Integration</option>
-            <option value="tool">Tool</option>
-          </select>
-          <div class="modal-actions">
-            <button class="modal-btn secondary" onclick="document.getElementById('addPluginModal').remove()">Cancel</button>
-            <button class="modal-btn primary" onclick="installPlugin()">Install</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-    }
-    
-    async function installPlugin() {
-      const name = document.getElementById('pluginName').value.trim();
-      const description = document.getElementById('pluginDesc').value.trim();
-      const repoUrl = document.getElementById('pluginRepo').value.trim();
-      const capabilities = document.getElementById('pluginCaps').value.split(',').map(c => c.trim()).filter(c => c);
-      const type = document.getElementById('pluginType').value;
-      
-      if (!name || !description) { alert('Name and description required'); return; }
-      
-      try {
-        const res = await fetch(`${API}/plugins`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, description, repoUrl, capabilities, type, author: user.email })
-        });
-        const data = await res.json();
-        if (data.id) {
-          document.getElementById('addPluginModal').remove();
-          loadPlugins();
-        } else {
-          alert(data.error || 'Failed to install plugin');
+          }
         }
-      } catch (err) { alert('Error: ' + err.message); }
+        
+        time += 0.01;
+      };
+      
+      p.windowResized = function() {
+        p.resizeCanvas(p.windowWidth, p.windowHeight);
+      };
+    };
+    
+    // Initialize p5 sketch
+    new p5(sketch);
+    
+    // === Dashboard Interactions ===
+    function scrollToSection(id) {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
     
-    if (token && user) {
-      document.getElementById('authOverlay').style.display = 'none';
-      updateUserUI();
-    } else {
-      document.getElementById('authOverlay').style.display = 'flex';
+    // Animate stats
+    function animateValue(id, start, end, duration) {
+      const obj = document.getElementById(id);
+      if (!obj) return;
+      const range = end - start;
+      const startTime = performance.now();
+      
+      function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        obj.textContent = Math.floor(start + range * ease);
+        if (progress < 1) requestAnimationFrame(update);
+      }
+      requestAnimationFrame(update);
     }
+    
+    // Initialize animated counters
+    setTimeout(() => {
+      animateValue('stat-agents', 0, 11, 800);
+      animateValue('stat-tasks', 0, 7, 600);
+      animateValue('stat-plugins', 0, 10, 700);
+    }, 500);
+    
+    // Live activity feed updates
+    const activities = [
+      { text: 'Agent "Code Worker" completed task in 2.3s', type: '', time: '30s ago' },
+      { text: 'Plugin "Video Agent" enabled', type: 'info', time: '1m ago' },
+      { text: 'Task queued: Generate landing page', type: '', time: '2m ago' },
+      { text: 'Memory indexed 16 capabilities', type: '', time: '5m ago' },
+      { text: 'New plugin available: ThreeWS 3D', type: 'warning', time: '10m ago' }
+    ];
+    
+    let activityIndex = 0;
+    function addActivity() {
+      const feed = document.getElementById('activity-feed');
+      if (!feed) return;
+      
+      const activity = activities[activityIndex % activities.length];
+      const div = document.createElement('div');
+      div.className = 'activity-item';
+      div.innerHTML = `
+        <div class="activity-dot ${activity.type}"></div>
+        <div class="activity-text">${activity.text}</div>
+        <div class="activity-time">${activity.time}</div>
+      `;
+      
+      feed.insertBefore(div, feed.firstChild);
+      
+      // Keep only last 10 items
+      while (feed.children.length > 10) {
+        feed.removeChild(feed.lastChild);
+      }
+      
+      activityIndex++;
+    }
+    
+    // Add new activity every 15 seconds
+    setInterval(addActivity, 15000);
   </script>
 </body>
 </html>
